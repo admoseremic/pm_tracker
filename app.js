@@ -17,6 +17,8 @@ const database = firebase.database();
 let projects = {};
 let transitionProject = null;
 let sortableInstances = {};
+let currentFilters = {};
+let filteredProjects = {};
 
 // Phase configuration
 const PHASES = {
@@ -71,6 +73,18 @@ function setupEventListeners() {
 
     // Initialize SortableJS for each column
     initializeSortableColumns();
+    
+    // Setup filter event listeners
+    setupFilterEventListeners();
+}
+
+// Setup filter event listeners
+function setupFilterEventListeners() {
+    // Filter dropdowns
+    document.getElementById('filter-pm-owner').addEventListener('change', applyFilters);
+    document.getElementById('filter-ux-lead').addEventListener('change', applyFilters);
+    document.getElementById('filter-dev-lead').addEventListener('change', applyFilters);
+    document.getElementById('filter-phase').addEventListener('change', applyFilters);
 }
 
 // Initialize SortableJS for all columns
@@ -211,9 +225,149 @@ function loadProjects() {
         // Fix any negative or problematic priorities
         fixProjectPriorities();
         
-        renderProjects();
-        updateProjectCounts();
+        // Update filter options based on current data
+        updateFilterOptions();
+        
+        // Apply current filters and render
+        applyFilters();
     });
+}
+
+// Update filter dropdown options based on current data
+function updateFilterOptions() {
+    const pmOwners = new Set();
+    const uxLeads = new Set();
+    const devLeads = new Set();
+    
+    Object.values(projects).forEach(project => {
+        if (project.pm_owner && project.pm_owner.trim()) {
+            pmOwners.add(project.pm_owner.trim());
+        }
+        if (project.ux_lead && project.ux_lead.trim()) {
+            uxLeads.add(project.ux_lead.trim());
+        }
+        if (project.dev_lead && project.dev_lead.trim()) {
+            devLeads.add(project.dev_lead.trim());
+        }
+    });
+    
+    // Update PM Owner dropdown
+    updateFilterDropdown('filter-pm-owner', pmOwners, 'All PM Owners');
+    updateFilterDropdown('filter-ux-lead', uxLeads, 'All UX Leads');
+    updateFilterDropdown('filter-dev-lead', devLeads, 'All Dev Leads');
+}
+
+// Update a specific filter dropdown with options
+function updateFilterDropdown(elementId, optionsSet, defaultText) {
+    const select = document.getElementById(elementId);
+    const currentValue = select.value;
+    
+    // Clear existing options except the first one
+    select.innerHTML = `<option value="">${defaultText}</option>`;
+    
+    // Add sorted options
+    const sortedOptions = Array.from(optionsSet).sort();
+    sortedOptions.forEach(option => {
+        const optionElement = document.createElement('option');
+        optionElement.value = option;
+        optionElement.textContent = option;
+        select.appendChild(optionElement);
+    });
+    
+    // Restore previous selection if it still exists
+    if (currentValue && sortedOptions.includes(currentValue)) {
+        select.value = currentValue;
+    }
+}
+
+// Apply current filters to projects
+function applyFilters() {
+    // Get current filter values
+    const filters = {
+        pm_owner: document.getElementById('filter-pm-owner').value,
+        ux_lead: document.getElementById('filter-ux-lead').value,
+        dev_lead: document.getElementById('filter-dev-lead').value,
+        phase: document.getElementById('filter-phase').value
+    };
+    
+    currentFilters = filters;
+    
+    // Filter projects
+    filteredProjects = {};
+    Object.values(projects).forEach(project => {
+        if (passesFilters(project, filters)) {
+            filteredProjects[project.id] = project;
+        }
+    });
+    
+    // Render filtered projects
+    renderProjects();
+    updateProjectCounts();
+    updateFilterStatus();
+}
+
+// Check if a project passes the current filters (INTERSECTION/AND logic)
+function passesFilters(project, filters) {
+    // All filters must pass for the project to be included (AND logic)
+    
+    // PM Owner filter - project must match selected PM owner
+    if (filters.pm_owner && project.pm_owner !== filters.pm_owner) {
+        return false;
+    }
+    
+    // UX Lead filter - project must match selected UX lead
+    if (filters.ux_lead && project.ux_lead !== filters.ux_lead) {
+        return false;
+    }
+    
+    // Dev Lead filter - project must match selected dev lead
+    if (filters.dev_lead && project.dev_lead !== filters.dev_lead) {
+        return false;
+    }
+    
+    // Phase filter - project must be in selected phase
+    if (filters.phase && project.phase !== filters.phase) {
+        return false;
+    }
+    
+    // If we get here, the project passes all active filters
+    return true;
+}
+
+// Update filter status display
+function updateFilterStatus() {
+    const totalProjects = Object.keys(projects).length;
+    const filteredCount = Object.keys(filteredProjects).length;
+    const statusElement = document.getElementById('filter-status');
+    
+    // Build list of active filters for display
+    const activeFilters = [];
+    if (currentFilters.pm_owner) activeFilters.push(`PM: ${currentFilters.pm_owner}`);
+    if (currentFilters.ux_lead) activeFilters.push(`UX: ${currentFilters.ux_lead}`);
+    if (currentFilters.dev_lead) activeFilters.push(`Dev: ${currentFilters.dev_lead}`);
+    if (currentFilters.phase) activeFilters.push(`Phase: ${PHASES[currentFilters.phase]?.name || currentFilters.phase}`);
+    
+    if (totalProjects === filteredCount) {
+        statusElement.textContent = `Showing all ${totalProjects} projects`;
+    } else {
+        const filterText = activeFilters.length > 0 ? ` (${activeFilters.join(' + ')})` : '';
+        statusElement.textContent = `Showing ${filteredCount} of ${totalProjects} projects${filterText}`;
+    }
+}
+
+// Clear all filters
+function clearAllFilters() {
+    document.getElementById('filter-pm-owner').value = '';
+    document.getElementById('filter-ux-lead').value = '';
+    document.getElementById('filter-dev-lead').value = '';
+    document.getElementById('filter-phase').value = '';
+    
+    // Clear any active quick filter buttons
+    document.querySelectorAll('.quick-filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    applyFilters();
 }
 
 // Fix negative or problematic priorities - renumber to 1, 2, 3...
@@ -262,7 +416,7 @@ function fixProjectPriorities() {
     }
 }
 
-// Render all projects on the board
+// Render filtered projects on the board
 function renderProjects() {
     // Clear all columns
     Object.keys(PHASES).forEach(phase => {
@@ -272,9 +426,13 @@ function renderProjects() {
         }
     });
 
+    // Use filtered projects, or empty object if no matches (don't fallback to all projects)
+    const hasActiveFilters = Object.values(currentFilters).some(filter => filter && filter.trim());
+    const projectsToRender = hasActiveFilters ? filteredProjects : projects;
+
     // Sort projects by priority within each phase
     const projectsByPhase = {};
-    Object.values(projects).forEach(project => {
+    Object.values(projectsToRender).forEach(project => {
         // Ensure phase is valid
         if (!project.phase || !PHASES[project.phase]) {
             console.warn('Project has invalid phase:', project);
@@ -394,12 +552,14 @@ function getLOESize(loe) {
     return 'medium';
 }
 
-// Update project counts in column headers
+// Update project counts in column headers (for filtered view)
 function updateProjectCounts() {
+    const hasActiveFilters = Object.values(currentFilters).some(filter => filter && filter.trim());
+    const projectsToCount = hasActiveFilters ? filteredProjects : projects;
     const counts = {};
     Object.keys(PHASES).forEach(phase => counts[phase] = 0);
     
-    Object.values(projects).forEach(project => {
+    Object.values(projectsToCount).forEach(project => {
         if (counts.hasOwnProperty(project.phase)) {
             counts[project.phase]++;
         }
@@ -411,10 +571,49 @@ function updateProjectCounts() {
             countElement.textContent = counts[phase];
         }
     });
+}
+
+// Quick filter implementations
+function applyQuickFilter(filterType) {
+    const clickedButton = event.target;
     
-    // Update total project count
-    const totalCount = Object.keys(projects).length;
-    document.getElementById('project-count').textContent = `${totalCount} project${totalCount !== 1 ? 's' : ''}`;
+    // Check if this quick filter is already active
+    if (clickedButton.classList.contains('active')) {
+        // Unclick: clear all filters and remove active state
+        clearAllFilters();
+        return;
+    }
+    
+    // Clear existing filters first
+    clearAllFilters();
+    
+    // Add active class to clicked button (clearAllFilters removes all active classes)
+    clickedButton.classList.add('active');
+    
+    // Apply the specific quick filter
+    switch (filterType) {
+        case 'my-projects':
+            // This would need user context - for now, just show all
+            // TODO: Implement when user authentication is added
+            break;
+            
+        case 'needs-validation':
+            // Show discovery projects with incomplete validation
+            document.getElementById('filter-phase').value = 'discovery';
+            break;
+            
+        case 'ready-soon':
+            // Show planning and ready projects
+            document.getElementById('filter-phase').value = 'ready';
+            break;
+            
+        case 'overdue':
+            // This would need milestone date logic - for now, just show all
+            // TODO: Implement milestone date comparison
+            break;
+    }
+    
+    applyFilters();
 }
 
 // Note: Drag and drop is now handled by SortableJS

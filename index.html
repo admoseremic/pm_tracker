@@ -39,6 +39,83 @@
             border-bottom: 1px solid #e0e0e0;
         }
 
+        .filter-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            flex: 1;
+            max-width: 800px;
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+        }
+
+        .filter-select {
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            background: white;
+            min-width: 140px;
+        }
+
+        .filter-select:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+        }
+
+        .quick-filters {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .quick-filter-label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #666;
+            margin-right: 0.5rem;
+        }
+
+        .quick-filter-btn {
+            background: none;
+            border: 1px solid #ddd;
+            color: #666;
+            padding: 0.375rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .quick-filter-btn:hover {
+            background: #f8f9fa;
+            border-color: #007bff;
+            color: #007bff;
+        }
+
+        .quick-filter-btn.active {
+            background: #007bff;
+            border-color: #007bff;
+            color: white;
+        }
+
+        .filter-status {
+            font-size: 0.875rem;
+            color: #666;
+            font-style: italic;
+        }
+
         .btn {
             background: #007bff;
             color: white;
@@ -390,8 +467,37 @@
     </div>
 
     <div class="toolbar">
-        <div>
-            <span id="project-count">0 projects</span>
+        <div class="filter-section">
+            <div class="filter-controls">
+                <select id="filter-pm-owner" class="filter-select">
+                    <option value="">All PM Owners</option>
+                </select>
+                <select id="filter-ux-lead" class="filter-select">
+                    <option value="">All UX Leads</option>
+                </select>
+                <select id="filter-dev-lead" class="filter-select">
+                    <option value="">All Dev Leads</option>
+                </select>
+                <select id="filter-phase" class="filter-select">
+                    <option value="">All Phases</option>
+                    <option value="idea">Ideas</option>
+                    <option value="discovery">Discovery</option>
+                    <option value="planning">Planning</option>
+                    <option value="ready">Ready for Delivery</option>
+                    <option value="delivery">Delivery</option>
+                </select>
+                <button class="btn btn-secondary btn-sm" onclick="clearAllFilters()">Clear</button>
+            </div>
+            <div class="quick-filters">
+                <span class="quick-filter-label">Quick:</span>
+                <button class="quick-filter-btn" onclick="applyQuickFilter('my-projects')" title="Projects where you're assigned">My Projects</button>
+                <button class="quick-filter-btn" onclick="applyQuickFilter('needs-validation')" title="Discovery projects needing validation">Needs Validation</button>
+                <button class="quick-filter-btn" onclick="applyQuickFilter('ready-soon')" title="Projects moving to delivery soon">Ready Soon</button>
+                <button class="quick-filter-btn" onclick="applyQuickFilter('overdue')" title="Projects past expected milestones">Overdue</button>
+            </div>
+            <div class="filter-status">
+                <span id="filter-status">Showing all projects</span>
+            </div>
         </div>
         <button class="btn" onclick="openNewProjectModal()">
             <span class="icon">+</span> New Project
