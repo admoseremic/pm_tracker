@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kanban Project Management Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: #fff;
+            border-bottom: 1px solid #e0e0e0;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            background: #fff;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+
+        .btn:hover {
+            background: #0056b3;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .kanban-board {
+            display: flex;
+            gap: 1rem;
+            padding: 2rem;
+            overflow-x: auto;
+            min-height: calc(100vh - 140px);
+        }
+
+        .kanban-column {
+            flex: 1;
+            min-width: 300px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .column-header {
+            padding: 1rem;
+            border-bottom: 1px solid #e0e0e0;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .phase-ideas { background-color: #e3f2fd; }
+        .phase-discovery { background-color: #f3e5f5; }
+        .phase-planning { background-color: #e8f5e8; }
+        .phase-ready { background-color: #fff3e0; }
+        .phase-delivery { background-color: #ffebee; }
+
+        .column-count {
+            background: #666;
+            color: white;
+            border-radius: 12px;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            font-weight: normal;
+        }
+
+        .column-content {
+            padding: 1rem;
+            min-height: 200px;
+        }
+
+        .project-card {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .project-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transform: translateY(-1px);
+        }
+
+        .project-card.dragging {
+            opacity: 0.5;
+            transform: rotate(2deg);
+        }
+
+        .project-title {
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+            color: #333;
+        }
+
+        .project-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            color: #666;
+            align-items: center;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .loe-indicator {
+            padding: 0.125rem 0.375rem;
+            border-radius: 12px;
+            font-size: 0.625rem;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+
+        .loe-small { background: #d4edda; color: #155724; }
+        .loe-medium { background: #fff3cd; color: #856404; }
+        .loe-large { background: #f8d7da; color: #721c24; }
+
+        .discovery-validation {
+            display: flex;
+            gap: 0.25rem;
+            margin-top: 0.5rem;
+        }
+
+        .validation-checkbox {
+            width: 16px;
+            height: 16px;
+            border: 1px solid #ccc;
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.625rem;
+            font-weight: 600;
+        }
+
+        .validation-checkbox.checked {
+            background: #28a745;
+            color: white;
+            border-color: #28a745;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            overflow-y: auto;
+        }
+
+        .modal-content {
+            background: #fff;
+            margin: 5% auto;
+            padding: 0;
+            border-radius: 8px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.25rem;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #666;
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.875rem;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .form-select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            background: white;
+        }
+
+        .modal-footer {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+        }
+
+        .drag-over {
+            background-color: rgba(0,123,255,0.1);
+            border: 2px dashed #007bff;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 0.75rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+
+        .success {
+            color: #155724;
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 0.75rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+
+        .icon {
+            width: 16px;
+            height: 16px;
+            display: inline-block;
+        }
+
+        @media (max-width: 768px) {
+            .kanban-board {
+                flex-direction: column;
+                padding: 1rem;
+            }
+            
+            .kanban-column {
+                min-width: auto;
+            }
+            
+            .toolbar {
+                padding: 1rem;
+                flex-direction: column;
+                gap: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Kanban Project Management Tool</h1>
+    </div>
+
+    <div class="toolbar">
+        <div>
+            <span id="project-count">0 projects</span>
+        </div>
+        <button class="btn" onclick="openNewProjectModal()">
+            <span class="icon">+</span> New Project
+        </button>
+    </div>
+
+    <div class="kanban-board">
+        <div class="kanban-column phase-ideas" data-phase="idea">
+            <div class="column-header">
+                Ideas
+                <span class="column-count" id="count-idea">0</span>
+            </div>
+            <div class="column-content" id="column-idea"></div>
+        </div>
+
+        <div class="kanban-column phase-discovery" data-phase="discovery">
+            <div class="column-header">
+                Discovery
+                <span class="column-count" id="count-discovery">0</span>
+            </div>
+            <div class="column-content" id="column-discovery"></div>
+        </div>
+
+        <div class="kanban-column phase-planning" data-phase="planning">
+            <div class="column-header">
+                Planning
+                <span class="column-count" id="count-planning">0</span>
+            </div>
+            <div class="column-content" id="column-planning"></div>
+        </div>
+
+        <div class="kanban-column phase-ready" data-phase="ready">
+            <div class="column-header">
+                Ready for Delivery
+                <span class="column-count" id="count-ready">0</span>
+            </div>
+            <div class="column-content" id="column-ready"></div>
+        </div>
+
+        <div class="kanban-column phase-delivery" data-phase="delivery">
+            <div class="column-header">
+                Delivery
+                <span class="column-count" id="count-delivery">0</span>
+            </div>
+            <div class="column-content" id="column-delivery"></div>
+        </div>
+    </div>
+
+    <!-- New Project Modal -->
+    <div id="new-project-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Project</h2>
+                <button class="close-btn" onclick="closeModal('new-project-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="new-project-form">
+                    <div class="form-group">
+                        <label class="form-label">Title *</label>
+                        <input type="text" id="project-title" class="form-input" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Description</label>
+                        <textarea id="project-description" class="form-input form-textarea"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Initial Phase</label>
+                        <select id="project-phase" class="form-select">
+                            <option value="idea">Ideas</option>
+                            <option value="discovery">Discovery</option>
+                            <option value="planning">Planning</option>
+                            <option value="ready">Ready for Delivery</option>
+                            <option value="delivery">Delivery</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Priority (0-100)</label>
+                        <input type="number" id="project-priority" class="form-input" min="0" max="100" value="50">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">PM Owner</label>
+                        <input type="text" id="project-pm-owner" class="form-input">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Dev Lead</label>
+                        <input type="text" id="project-dev-lead" class="form-input">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">UX Lead</label>
+                        <input type="text" id="project-ux-lead" class="form-input">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Level of Effort Estimate</label>
+                        <input type="text" id="project-loe" class="form-input" placeholder="e.g., 2 weeks, 1 month">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('new-project-modal')">Cancel</button>
+                <button class="btn" onclick="createProject()">Create Project</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Project Detail Modal -->
+    <div id="project-detail-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="detail-modal-title">Project Details</h2>
+                <button class="close-btn" onclick="closeModal('project-detail-modal')">&times;</button>
+            </div>
+            <div class="modal-body" id="project-detail-content">
+                <!-- Content will be dynamically generated -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Phase Transition Modal -->
+    <div id="phase-transition-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="transition-modal-title">Phase Transition</h2>
+                <button class="close-btn" onclick="closeModal('phase-transition-modal')">&times;</button>
+            </div>
+            <div class="modal-body" id="phase-transition-content">
+                <!-- Content will be dynamically generated -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('phase-transition-modal')">Cancel</button>
+                <button class="btn" onclick="confirmPhaseTransition()">Confirm Transition</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
