@@ -84,21 +84,80 @@ function setupEventListeners() {
 function loadProjects() {
     database.ref('projects').on('value', (snapshot) => {
         projects = snapshot.val() || {};
+        
+        // Fix any negative or problematic priorities
+        fixProjectPriorities();
+        
         renderProjects();
         updateProjectCounts();
     });
+}
+
+// Fix negative or problematic priorities - renumber to 1, 2, 3...
+function fixProjectPriorities() {
+    const updates = {};
+    let needsFix = false;
+    
+    // Check each phase
+    Object.keys(PHASES).forEach(phase => {
+        const phaseProjects = Object.values(projects)
+            .filter(p => p.phase === phase)
+            .sort((a, b) => {
+                // Sort by existing priority, treating invalid as very high
+                const aPriority = (typeof a.priority === 'number') ? a.priority : 999999;
+                const bPriority = (typeof b.priority === 'number') ? b.priority : 999999;
+                return aPriority - bPriority;
+            });
+        
+        // Check if renumbering is needed (gaps, negatives, or duplicates)
+        let expectedPriority = 1;
+        const needsRenumber = phaseProjects.some(p => {
+            const result = p.priority !== expectedPriority++;
+            return result;
+        });
+        
+        if (needsRenumber && phaseProjects.length > 0) {
+            needsFix = true;
+            console.log(`Renumbering priorities for phase: ${phase}`);
+            
+            // Assign clean 1, 2, 3... priorities
+            phaseProjects.forEach((project, index) => {
+                const newPriority = index + 1;
+                updates[`projects/${project.id}/priority`] = newPriority;
+                // Update local copy immediately
+                projects[project.id].priority = newPriority;
+            });
+        }
+    });
+    
+    // Apply all updates at once
+    if (Object.keys(updates).length > 0) {
+        console.log('Renumbering priorities:', updates);
+        database.ref().update(updates).catch(error => {
+            console.error('Error fixing priorities:', error);
+        });
+    }
 }
 
 // Render all projects on the board
 function renderProjects() {
     // Clear all columns
     Object.keys(PHASES).forEach(phase => {
-        document.getElementById(`column-${phase}`).innerHTML = '';
+        const column = document.getElementById(`column-${phase}`);
+        if (column) {
+            column.innerHTML = '';
+        }
     });
 
     // Sort projects by priority within each phase
     const projectsByPhase = {};
     Object.values(projects).forEach(project => {
+        // Ensure phase is valid
+        if (!project.phase || !PHASES[project.phase]) {
+            console.warn('Project has invalid phase:', project);
+            return;
+        }
+        
         if (!projectsByPhase[project.phase]) {
             projectsByPhase[project.phase] = [];
         }
@@ -107,13 +166,20 @@ function renderProjects() {
 
     // Render projects in each column
     Object.keys(projectsByPhase).forEach(phase => {
-        const sortedProjects = projectsByPhase[phase].sort((a, b) => (b.priority || 0) - (a.priority || 0));
-        const columnElement = document.getElementById(`column-${phase}`);
-        
-        sortedProjects.forEach(project => {
-            const projectCard = createProjectCard(project);
-            columnElement.appendChild(projectCard);
+        // Sort by priority (lower number = higher in column, priority 1 is at top)
+        const sortedProjects = projectsByPhase[phase].sort((a, b) => {
+            const aPriority = typeof a.priority === 'number' ? a.priority : 999999;
+            const bPriority = typeof b.priority === 'number' ? b.priority : 999999;
+            return aPriority - bPriority; // Lower number comes first
         });
+        
+        const columnElement = document.getElementById(`column-${phase}`);
+        if (columnElement) {
+            sortedProjects.forEach(project => {
+                const projectCard = createProjectCard(project);
+                columnElement.appendChild(projectCard);
+            });
+        }
     });
 }
 
@@ -408,63 +474,7 @@ function reorderProjects(draggedProjectId, targetProjectId, position, targetPhas
     
     if (!draggedProject || !targetProject) return;
     
-    // Get all projects in the target phase, sorted by priority
-    const phaseProjects = Object.values(projects)
-        .filter(p => p.phase === targetPhase)
-        .sort((a, b) => (b.priority || 0) - (a.priority || 0));
-    
-    // Find the target project's current index
-    const targetIndex = phaseProjects.findIndex(p => p.id === targetProjectId);
-    if (targetIndex === -1) return;
-    
-    // Calculate new priority
-    let newPriority;
-    
-    if (position === 'before') {
-        // Insert before target
-        if (targetIndex === 0) {
-            // Inserting at the top
-            newPriority = (targetProject.priority || 0) + 10;
-        } else {
-            // Insert between previous project and target
-            const prevProject = phaseProjects[targetIndex - 1];
-            newPriority = Math.floor(((prevProject.priority || 0) + (targetProject.priority || 0)) / 2);
-            
-            // If priorities are too close, spread them out
-            if (newPriority === (targetProject.priority || 0) || newPriority === (prevProject.priority || 0)) {
-                rebalancePriorities(targetPhase);
-                // Retry with rebalanced priorities
-                setTimeout(() => reorderProjects(draggedProjectId, targetProjectId, position, targetPhase), 100);
-                return;
-            }
-        }
-    } else {
-        // Insert after target
-        if (targetIndex === phaseProjects.length - 1) {
-            // Inserting at the bottom
-            newPriority = Math.max(0, (targetProject.priority || 0) - 10);
-        } else {
-            // Insert between target and next project
-            const nextProject = phaseProjects[targetIndex + 1];
-            newPriority = Math.floor(((targetProject.priority || 0) + (nextProject.priority || 0)) / 2);
-            
-            // If priorities are too close, spread them out
-            if (newPriority === (targetProject.priority || 0) || newPriority === (nextProject.priority || 0)) {
-                rebalancePriorities(targetPhase);
-                // Retry with rebalanced priorities
-                setTimeout(() => reorderProjects(draggedProjectId, targetProjectId, position, targetPhase), 100);
-                return;
-            }
-        }
-    }
-    
-    // Update the dragged project
-    const updates = {
-        priority: newPriority,
-        updated_at: new Date().toISOString()
-    };
-    
-    // Handle phase change if needed
+    // Check for phase transition requirements first
     if (draggedProject.phase !== targetPhase) {
         const transitionKey = `${draggedProject.phase}-${targetPhase}`;
         const requirements = TRANSITION_REQUIREMENTS[transitionKey];
@@ -473,56 +483,87 @@ function reorderProjects(draggedProjectId, targetProjectId, position, targetPhas
             showPhaseTransitionModal(draggedProject, targetPhase, requirements);
             return;
         }
-        
-        // Add phase change updates
-        const phaseHistory = draggedProject.phase_history || {};
-        const newHistoryKey = Object.keys(phaseHistory).length.toString();
-        phaseHistory[newHistoryKey] = {
-            phase: targetPhase,
-            entered_at: new Date().toISOString(),
-            entered_by: 'user'
-        };
-        
-        updates.phase = targetPhase;
-        updates.phase_history = phaseHistory;
     }
     
-    database.ref(`projects/${draggedProjectId}`).update(updates);
+    // Get all projects in the target phase (including dragged if same phase)
+    let phaseProjects = Object.values(projects)
+        .filter(p => p.phase === targetPhase && p.id !== draggedProjectId)
+        .sort((a, b) => (a.priority || 999999) - (b.priority || 999999)); // Sort ascending (1 is top)
+    
+    // Find where to insert the dragged project
+    const targetIndex = phaseProjects.findIndex(p => p.id === targetProjectId);
+    if (targetIndex === -1) return;
+    
+    // Insert the dragged project at the appropriate position
+    const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+    phaseProjects.splice(insertIndex, 0, draggedProject);
+    
+    // Now update ALL projects in the phase with new priorities (1, 2, 3, ...)
+    const updates = {};
+    const now = new Date().toISOString();
+    
+    phaseProjects.forEach((project, index) => {
+        const newPriority = index + 1; // Start at 1
+        
+        if (project.id === draggedProjectId) {
+            // Update the dragged project (may include phase change)
+            updates[`projects/${project.id}/priority`] = newPriority;
+            updates[`projects/${project.id}/updated_at`] = now;
+            
+            if (draggedProject.phase !== targetPhase) {
+                // Add phase change updates
+                const phaseHistory = draggedProject.phase_history || {};
+                const newHistoryKey = Object.keys(phaseHistory).length.toString();
+                phaseHistory[newHistoryKey] = {
+                    phase: targetPhase,
+                    entered_at: now,
+                    entered_by: 'user'
+                };
+                
+                updates[`projects/${project.id}/phase`] = targetPhase;
+                updates[`projects/${project.id}/phase_history`] = phaseHistory;
+            }
+        } else if (project.priority !== newPriority) {
+            // Only update if priority actually changed
+            updates[`projects/${project.id}/priority`] = newPriority;
+            updates[`projects/${project.id}/updated_at`] = now;
+        }
+    });
+    
+    // Apply all updates atomically
+    if (Object.keys(updates).length > 0) {
+        console.log(`Reordering ${phaseProjects.length} projects in ${targetPhase}`, updates);
+        database.ref().update(updates);
+    }
 }
 
-// Move project to end of phase
+// Move project to end of phase (when dropping on empty space)
 function moveProjectToEndOfPhase(projectId, phase) {
     const project = projects[projectId];
     if (!project) return;
     
-    // Find the lowest priority in the phase
-    const phaseProjects = Object.values(projects).filter(p => p.phase === phase);
-    const minPriority = Math.min(...phaseProjects.map(p => p.priority || 0));
-    
-    const updates = {
-        priority: Math.max(0, minPriority - 10),
-        updated_at: new Date().toISOString()
-    };
-    
-    database.ref(`projects/${projectId}`).update(updates);
-}
-
-// Rebalance priorities to spread them out evenly
-function rebalancePriorities(phase) {
+    // Get all projects in phase and add dragged one at the end
     const phaseProjects = Object.values(projects)
-        .filter(p => p.phase === phase)
-        .sort((a, b) => (b.priority || 0) - (a.priority || 0));
+        .filter(p => p.phase === phase && p.id !== projectId)
+        .sort((a, b) => (a.priority || 999999) - (b.priority || 999999));
     
+    // Add dragged project at the end
+    phaseProjects.push(project);
+    
+    // Reindex all with priorities 1, 2, 3...
     const updates = {};
-    phaseProjects.forEach((project, index) => {
-        const newPriority = 100 - (index * 10); // Start at 100, decrease by 10 for each project
-        if (project.priority !== newPriority) {
-            updates[`projects/${project.id}/priority`] = newPriority;
-            updates[`projects/${project.id}/updated_at`] = new Date().toISOString();
+    const now = new Date().toISOString();
+    
+    phaseProjects.forEach((p, index) => {
+        const newPriority = index + 1;
+        if (p.priority !== newPriority) {
+            updates[`projects/${p.id}/priority`] = newPriority;
+            updates[`projects/${p.id}/updated_at`] = now;
         }
     });
     
     if (Object.keys(updates).length > 0) {
+        console.log(`Moving to end of ${phase}, updating ${Object.keys(updates).length} priorities`);
         database.ref().update(updates);
     }
 }
@@ -711,12 +752,22 @@ function createProject() {
         return;
     }
     
+    const selectedPhase = document.getElementById('project-phase').value;
+    
+    // Calculate appropriate priority for new project (add to bottom)
+    const phaseProjects = Object.values(projects)
+        .filter(p => p.phase === selectedPhase)
+        .sort((a, b) => (a.priority || 999999) - (b.priority || 999999));
+    
+    // New project gets priority = number of existing projects + 1
+    const calculatedPriority = phaseProjects.length + 1;
+    
     const projectData = {
         id: generateId(),
         title: title,
         description: document.getElementById('project-description').value.trim(),
-        phase: document.getElementById('project-phase').value,
-        priority: parseInt(document.getElementById('project-priority').value) || 50,
+        phase: selectedPhase,
+        priority: calculatedPriority, // Use calculated priority instead of form value
         pm_owner: document.getElementById('project-pm-owner').value.trim(),
         dev_lead: document.getElementById('project-dev-lead').value.trim(),
         ux_lead: document.getElementById('project-ux-lead').value.trim(),
@@ -725,7 +776,7 @@ function createProject() {
         updated_at: new Date().toISOString(),
         phase_history: {
             '0': {
-                phase: document.getElementById('project-phase').value,
+                phase: selectedPhase,
                 entered_at: new Date().toISOString(),
                 entered_by: 'user'
             }
@@ -759,11 +810,14 @@ function editProject(projectId) {
     document.getElementById('project-title').value = project.title || '';
     document.getElementById('project-description').value = project.description || '';
     document.getElementById('project-phase').value = project.phase || 'idea';
-    document.getElementById('project-priority').value = project.priority || 50;
     document.getElementById('project-pm-owner').value = project.pm_owner || '';
     document.getElementById('project-dev-lead').value = project.dev_lead || '';
     document.getElementById('project-ux-lead').value = project.ux_lead || '';
     document.getElementById('project-loe').value = project.loe_estimate || '';
+    
+    // Show priority field for editing and populate it
+    document.getElementById('priority-group').style.display = 'block';
+    document.getElementById('project-priority').value = project.priority || '';
     
     // Change modal title and button
     document.querySelector('#new-project-modal .modal-header h2').textContent = 'Edit Project';
@@ -785,11 +839,11 @@ function updateProject(projectId) {
     
     const currentProject = projects[projectId];
     const newPhase = document.getElementById('project-phase').value;
+    const newPriority = parseInt(document.getElementById('project-priority').value);
     
     const updates = {
         title: title,
         description: document.getElementById('project-description').value.trim(),
-        priority: parseInt(document.getElementById('project-priority').value) || 50,
         pm_owner: document.getElementById('project-pm-owner').value.trim(),
         dev_lead: document.getElementById('project-dev-lead').value.trim(),
         ux_lead: document.getElementById('project-ux-lead').value.trim(),
@@ -798,6 +852,7 @@ function updateProject(projectId) {
     };
     
     // Handle phase change if different
+    let targetPhase = currentProject.phase;
     if (newPhase !== currentProject.phase) {
         const transitionKey = `${currentProject.phase}-${newPhase}`;
         const requirements = TRANSITION_REQUIREMENTS[transitionKey];
@@ -816,17 +871,57 @@ function updateProject(projectId) {
             };
             updates.phase = newPhase;
             updates.phase_history = phaseHistory;
+            targetPhase = newPhase;
         }
     }
     
-    database.ref(`projects/${projectId}`).update(updates).then(() => {
-        closeModal('new-project-modal');
-        resetNewProjectModal();
-        document.getElementById('new-project-form').reset();
-    }).catch(error => {
-        console.error('Error updating project:', error);
-        alert('Error updating project. Please try again.');
-    });
+    // Handle manual priority change
+    if (newPriority && newPriority > 0 && newPriority !== currentProject.priority) {
+        // Need to renumber all projects in the phase
+        const phaseProjects = Object.values(projects)
+            .filter(p => p.phase === targetPhase && p.id !== projectId)
+            .sort((a, b) => (a.priority || 999999) - (b.priority || 999999));
+        
+        // Insert current project at the desired position
+        const insertIndex = Math.min(newPriority - 1, phaseProjects.length);
+        phaseProjects.splice(insertIndex, 0, currentProject);
+        
+        // Batch update all priorities
+        const batchUpdates = {};
+        phaseProjects.forEach((p, index) => {
+            const priority = index + 1;
+            if (p.id === projectId) {
+                updates.priority = priority;
+            } else if (p.priority !== priority) {
+                batchUpdates[`projects/${p.id}/priority`] = priority;
+                batchUpdates[`projects/${p.id}/updated_at`] = new Date().toISOString();
+            }
+        });
+        
+        // Apply project updates and batch updates together
+        database.ref(`projects/${projectId}`).update(updates).then(() => {
+            if (Object.keys(batchUpdates).length > 0) {
+                return database.ref().update(batchUpdates);
+            }
+        }).then(() => {
+            closeModal('new-project-modal');
+            resetNewProjectModal();
+            document.getElementById('new-project-form').reset();
+        }).catch(error => {
+            console.error('Error updating project:', error);
+            alert('Error updating project. Please try again.');
+        });
+    } else {
+        // No priority change, just update the project
+        database.ref(`projects/${projectId}`).update(updates).then(() => {
+            closeModal('new-project-modal');
+            resetNewProjectModal();
+            document.getElementById('new-project-form').reset();
+        }).catch(error => {
+            console.error('Error updating project:', error);
+            alert('Error updating project. Please try again.');
+        });
+    }
 }
 
 // Reset new project modal to default state
@@ -835,6 +930,10 @@ function resetNewProjectModal() {
     const createButton = document.querySelector('#new-project-modal .modal-footer .btn:not(.btn-secondary)');
     createButton.textContent = 'Create Project';
     createButton.onclick = createProject;
+    
+    // Hide priority field (only shown for editing)
+    document.getElementById('priority-group').style.display = 'none';
+    document.getElementById('project-priority').value = '';
 }
 
 // Delete project

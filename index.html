@@ -431,9 +431,10 @@
                         </select>
                     </div>
 
-                    <div class="form-group">
-                        <label class="form-label">Priority (0-100)</label>
-                        <input type="number" id="project-priority" class="form-input" min="0" max="100" value="50">
+
+                    <div class="form-group" id="priority-group" style="display: none;">
+                        <label class="form-label">Priority (1 = top of list)</label>
+                        <input type="number" id="project-priority" class="form-input" min="1" placeholder="Auto-assigned">
                     </div>
 
                     <div class="form-group">
