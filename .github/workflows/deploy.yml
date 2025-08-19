@@ -27,15 +27,21 @@ jobs:
 
       - name: Deploy to Firebase Hosting (Preview)
         if: github.event_name == 'pull_request'
-        run: firebase deploy --only hosting --token ${{ secrets.FIREBASE_TOKEN }} --project pm-kanban
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > $HOME/firebase-service-account.json
+          export GOOGLE_APPLICATION_CREDENTIALS=$HOME/firebase-service-account.json
+          firebase deploy --only hosting --project pm-kanban
         env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
       - name: Deploy to Firebase Hosting (Production)
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        run: firebase deploy --only hosting --token ${{ secrets.FIREBASE_TOKEN }} --project pm-kanban
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > $HOME/firebase-service-account.json
+          export GOOGLE_APPLICATION_CREDENTIALS=$HOME/firebase-service-account.json
+          firebase deploy --only hosting --project pm-kanban
         env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
       - name: Comment PR with preview URL
         if: github.event_name == 'pull_request'
