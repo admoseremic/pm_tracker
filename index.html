@@ -297,6 +297,45 @@
             box-shadow: 0 2px 8px rgba(0,123,255,0.3);
         }
 
+        /* SortableJS styling */
+        .sortable-ghost {
+            opacity: 0.4;
+            background: #c8ebfb !important;
+            border: 2px dashed #007bff !important;
+        }
+
+        .sortable-chosen {
+            transform: rotate(2deg);
+            box-shadow: 0 8px 24px rgba(0,123,255,0.4) !important;
+        }
+
+        .sortable-drag {
+            opacity: 0.8;
+            transform: rotate(2deg);
+            box-shadow: 0 12px 32px rgba(0,0,0,0.3) !important;
+            z-index: 1000;
+        }
+
+        .sortable-fallback {
+            background: #fff;
+            border: 2px solid #007bff;
+            box-shadow: 0 8px 24px rgba(0,123,255,0.4);
+            transform: rotate(2deg);
+            cursor: grabbing !important;
+        }
+
+        /* Column highlighting during drag */
+        .column-drag-over {
+            background-color: rgba(0,123,255,0.05) !important;
+            border: 2px dashed #007bff !important;
+            border-radius: 8px;
+        }
+
+        /* Smooth transitions for card movement */
+        .project-card {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
         .loading {
             text-align: center;
             padding: 2rem;
@@ -497,6 +536,7 @@
 
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

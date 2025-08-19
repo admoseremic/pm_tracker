@@ -15,9 +15,8 @@ const database = firebase.database();
 
 // Global variables
 let projects = {};
-let currentDraggedProject = null;
 let transitionProject = null;
-let dragOverElement = null;
+let sortableInstances = {};
 
 // Phase configuration
 const PHASES = {
@@ -70,14 +69,138 @@ function setupEventListeners() {
         }
     });
 
-    // Setup drag and drop for columns
-    const columns = document.querySelectorAll('.column-content');
-    columns.forEach(column => {
-        column.addEventListener('dragover', handleDragOver);
-        column.addEventListener('drop', handleDrop);
-        column.addEventListener('dragenter', handleDragEnter);
-        column.addEventListener('dragleave', handleDragLeave);
+    // Initialize SortableJS for each column
+    initializeSortableColumns();
+}
+
+// Initialize SortableJS for all columns
+function initializeSortableColumns() {
+    Object.keys(PHASES).forEach(phase => {
+        const columnElement = document.getElementById(`column-${phase}`);
+        if (columnElement && !sortableInstances[phase]) {
+            sortableInstances[phase] = new Sortable(columnElement, {
+                group: 'kanban', // Allow dragging between columns
+                animation: 300, // Smooth animation
+                ghostClass: 'sortable-ghost',
+                chosenClass: 'sortable-chosen', 
+                dragClass: 'sortable-drag',
+                fallbackClass: 'sortable-fallback',
+                forceFallback: false, // Use native HTML5 DnD when possible
+                scroll: true,
+                scrollSensitivity: 100,
+                scrollSpeed: 20,
+                
+                // Callback when drag starts
+                onStart: function(evt) {
+                    // Add visual feedback to all columns
+                    Object.keys(PHASES).forEach(p => {
+                        const col = document.getElementById(`column-${p}`);
+                        if (col && p !== phase) {
+                            col.closest('.kanban-column').classList.add('column-drag-over');
+                        }
+                    });
+                },
+                
+                // Callback when drag ends
+                onEnd: function(evt) {
+                    // Remove visual feedback from all columns
+                    Object.keys(PHASES).forEach(p => {
+                        const col = document.getElementById(`column-${p}`);
+                        if (col) {
+                            col.closest('.kanban-column').classList.remove('column-drag-over');
+                        }
+                    });
+                    
+                    // Handle the reordering
+                    handleSortableMove(evt);
+                }
+            });
+        }
     });
+}
+
+// Handle SortableJS move event
+function handleSortableMove(evt) {
+    const projectId = evt.item.dataset.projectId;
+    const newPhase = evt.to.closest('.kanban-column').dataset.phase;
+    const oldPhase = evt.from.closest('.kanban-column').dataset.phase;
+    const newIndex = evt.newIndex;
+    
+    if (!projectId || !projects[projectId]) {
+        console.error('Invalid project or project not found:', projectId);
+        return;
+    }
+    
+    console.log(`Moving ${projects[projectId].title} from ${oldPhase} to ${newPhase} at position ${newIndex + 1}`);
+    
+    // If moving to a different phase, check transition requirements
+    if (oldPhase !== newPhase) {
+        const transitionKey = `${oldPhase}-${newPhase}`;
+        const requirements = TRANSITION_REQUIREMENTS[transitionKey];
+        
+        if (requirements && !checkTransitionRequirements(projects[projectId], requirements)) {
+            // Revert the move and show transition modal
+            evt.item.remove(); // Remove from new position
+            evt.from.insertBefore(evt.item, evt.from.children[evt.oldIndex]); // Put back in old position
+            showPhaseTransitionModal(projects[projectId], newPhase, requirements);
+            return;
+        }
+    }
+    
+    // Handle the reordering with batch updates
+    handleSortableReorder(projectId, newPhase, newIndex);
+}
+
+// Handle reordering after SortableJS move
+function handleSortableReorder(projectId, targetPhase, newIndex) {
+    const draggedProject = projects[projectId];
+    if (!draggedProject) return;
+    
+    // Get all projects in the target phase (including the dragged one if same phase)
+    let phaseProjects = Object.values(projects)
+        .filter(p => p.phase === targetPhase && p.id !== projectId)
+        .sort((a, b) => (a.priority || 999999) - (b.priority || 999999));
+    
+    // Insert the dragged project at the new position
+    phaseProjects.splice(newIndex, 0, draggedProject);
+    
+    // Batch update all priorities
+    const updates = {};
+    const now = new Date().toISOString();
+    
+    phaseProjects.forEach((project, index) => {
+        const newPriority = index + 1;
+        
+        if (project.id === projectId) {
+            // Update the dragged project (may include phase change)
+            updates[`projects/${project.id}/priority`] = newPriority;
+            updates[`projects/${project.id}/updated_at`] = now;
+            
+            if (draggedProject.phase !== targetPhase) {
+                // Add phase change updates
+                const phaseHistory = draggedProject.phase_history || {};
+                const newHistoryKey = Object.keys(phaseHistory).length.toString();
+                phaseHistory[newHistoryKey] = {
+                    phase: targetPhase,
+                    entered_at: now,
+                    entered_by: 'user'
+                };
+                
+                updates[`projects/${project.id}/phase`] = targetPhase;
+                updates[`projects/${project.id}/phase_history`] = phaseHistory;
+            }
+        } else if (project.priority !== newPriority) {
+            // Only update if priority actually changed
+            updates[`projects/${project.id}/priority`] = newPriority;
+            updates[`projects/${project.id}/updated_at`] = now;
+        }
+    });
+    
+    // Apply all updates atomically
+    if (Object.keys(updates).length > 0) {
+        console.log(`Batch updating ${Object.keys(updates).length / 2} projects in ${targetPhase}`);
+        database.ref().update(updates);
+    }
 }
 
 // Load projects from Firebase
@@ -181,13 +304,15 @@ function renderProjects() {
             });
         }
     });
+    
+    // Reinitialize SortableJS after rendering (in case new columns were added)
+    initializeSortableColumns();
 }
 
 // Create a project card element
 function createProjectCard(project) {
     const card = document.createElement('div');
     card.className = 'project-card';
-    card.draggable = true;
     card.dataset.projectId = project.id;
     
     // Calculate days in current phase
@@ -224,13 +349,8 @@ function createProjectCard(project) {
         ${project.phase === 'discovery' ? createDiscoveryValidation(project) : ''}
     `;
 
-    // Add event listeners
+    // Add event listeners (only click - SortableJS handles drag)
     card.addEventListener('click', () => showProjectDetail(project.id));
-    card.addEventListener('dragstart', handleDragStart);
-    card.addEventListener('dragend', handleDragEnd);
-    card.addEventListener('dragover', handleCardDragOver);
-    card.addEventListener('dragenter', handleCardDragEnter);
-    card.addEventListener('dragleave', handleCardDragLeave);
 
     return card;
 }
@@ -297,140 +417,8 @@ function updateProjectCounts() {
     document.getElementById('project-count').textContent = `${totalCount} project${totalCount !== 1 ? 's' : ''}`;
 }
 
-// Drag and drop handlers
-function handleDragStart(e) {
-    currentDraggedProject = e.target.dataset.projectId;
-    e.target.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-}
-
-function handleDragEnd(e) {
-    e.target.classList.remove('dragging');
-    currentDraggedProject = null;
-    dragOverElement = null;
-    
-    // Remove drag-over classes from all elements
-    document.querySelectorAll('.column-content').forEach(col => {
-        col.parentElement.classList.remove('drag-over');
-    });
-    document.querySelectorAll('.project-card').forEach(card => {
-        card.classList.remove('drag-over-top', 'drag-over-bottom');
-    });
-}
-
-function handleDragOver(e) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-}
-
-function handleDragEnter(e) {
-    e.preventDefault();
-    e.target.closest('.kanban-column').classList.add('drag-over');
-}
-
-function handleDragLeave(e) {
-    if (!e.target.closest('.kanban-column').contains(e.relatedTarget)) {
-        e.target.closest('.kanban-column').classList.remove('drag-over');
-    }
-}
-
-// Card-specific drag handlers for reordering
-function handleCardDragOver(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    if (!currentDraggedProject) return;
-    
-    const card = e.currentTarget;
-    const cardId = card.dataset.projectId;
-    
-    // Don't show drop indicator on the dragged card itself
-    if (cardId === currentDraggedProject) return;
-    
-    const rect = card.getBoundingClientRect();
-    const midY = rect.top + rect.height / 2;
-    const isTopHalf = e.clientY < midY;
-    
-    // Remove all drag-over classes from cards
-    document.querySelectorAll('.project-card').forEach(c => {
-        c.classList.remove('drag-over-top', 'drag-over-bottom');
-    });
-    
-    // Add appropriate class
-    if (isTopHalf) {
-        card.classList.add('drag-over-top');
-    } else {
-        card.classList.add('drag-over-bottom');
-    }
-    
-    dragOverElement = { card, position: isTopHalf ? 'before' : 'after' };
-}
-
-function handleCardDragEnter(e) {
-    e.preventDefault();
-    e.stopPropagation();
-}
-
-function handleCardDragLeave(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const card = e.currentTarget;
-    if (!card.contains(e.relatedTarget)) {
-        card.classList.remove('drag-over-top', 'drag-over-bottom');
-    }
-}
-
-function handleDrop(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const column = e.target.closest('.kanban-column');
-    const card = e.target.closest('.project-card');
-    
-    if (column) {
-        column.classList.remove('drag-over');
-    }
-    
-    if (!currentDraggedProject) return;
-    
-    const project = projects[currentDraggedProject];
-    if (!project) return;
-    
-    // Check if we're dropping on a card (for reordering) or on a column (for phase change)
-    if (card && dragOverElement && card.dataset.projectId !== currentDraggedProject) {
-        // Reordering within same phase or different phase
-        const targetCardId = card.dataset.projectId;
-        const targetProject = projects[targetCardId];
-        
-        if (targetProject) {
-            reorderProjects(currentDraggedProject, targetCardId, dragOverElement.position, targetProject.phase);
-        }
-    } else if (column) {
-        // Dropping on column (phase change or adding to end)
-        const newPhase = column.dataset.phase;
-        
-        if (project.phase !== newPhase) {
-            // Phase change
-            const transitionKey = `${project.phase}-${newPhase}`;
-            const requirements = TRANSITION_REQUIREMENTS[transitionKey];
-            
-            if (requirements && !checkTransitionRequirements(project, requirements)) {
-                showPhaseTransitionModal(project, newPhase, requirements);
-            } else {
-                moveProjectToPhase(currentDraggedProject, newPhase);
-            }
-        } else {
-            // Same phase, move to end
-            moveProjectToEndOfPhase(currentDraggedProject, newPhase);
-        }
-    }
-    
-    // Clean up
-    document.querySelectorAll('.project-card').forEach(c => {
-        c.classList.remove('drag-over-top', 'drag-over-bottom');
-    });
-}
+// Note: Drag and drop is now handled by SortableJS
+// The old drag handlers have been removed and replaced with SortableJS callbacks
 
 // Check if transition requirements are met
 function checkTransitionRequirements(project, requirements) {
@@ -467,106 +455,8 @@ function moveProjectToPhase(projectId, newPhase) {
     database.ref(`projects/${projectId}`).update(updates);
 }
 
-// Reorder projects within or between phases
-function reorderProjects(draggedProjectId, targetProjectId, position, targetPhase) {
-    const draggedProject = projects[draggedProjectId];
-    const targetProject = projects[targetProjectId];
-    
-    if (!draggedProject || !targetProject) return;
-    
-    // Check for phase transition requirements first
-    if (draggedProject.phase !== targetPhase) {
-        const transitionKey = `${draggedProject.phase}-${targetPhase}`;
-        const requirements = TRANSITION_REQUIREMENTS[transitionKey];
-        
-        if (requirements && !checkTransitionRequirements(draggedProject, requirements)) {
-            showPhaseTransitionModal(draggedProject, targetPhase, requirements);
-            return;
-        }
-    }
-    
-    // Get all projects in the target phase (including dragged if same phase)
-    let phaseProjects = Object.values(projects)
-        .filter(p => p.phase === targetPhase && p.id !== draggedProjectId)
-        .sort((a, b) => (a.priority || 999999) - (b.priority || 999999)); // Sort ascending (1 is top)
-    
-    // Find where to insert the dragged project
-    const targetIndex = phaseProjects.findIndex(p => p.id === targetProjectId);
-    if (targetIndex === -1) return;
-    
-    // Insert the dragged project at the appropriate position
-    const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
-    phaseProjects.splice(insertIndex, 0, draggedProject);
-    
-    // Now update ALL projects in the phase with new priorities (1, 2, 3, ...)
-    const updates = {};
-    const now = new Date().toISOString();
-    
-    phaseProjects.forEach((project, index) => {
-        const newPriority = index + 1; // Start at 1
-        
-        if (project.id === draggedProjectId) {
-            // Update the dragged project (may include phase change)
-            updates[`projects/${project.id}/priority`] = newPriority;
-            updates[`projects/${project.id}/updated_at`] = now;
-            
-            if (draggedProject.phase !== targetPhase) {
-                // Add phase change updates
-                const phaseHistory = draggedProject.phase_history || {};
-                const newHistoryKey = Object.keys(phaseHistory).length.toString();
-                phaseHistory[newHistoryKey] = {
-                    phase: targetPhase,
-                    entered_at: now,
-                    entered_by: 'user'
-                };
-                
-                updates[`projects/${project.id}/phase`] = targetPhase;
-                updates[`projects/${project.id}/phase_history`] = phaseHistory;
-            }
-        } else if (project.priority !== newPriority) {
-            // Only update if priority actually changed
-            updates[`projects/${project.id}/priority`] = newPriority;
-            updates[`projects/${project.id}/updated_at`] = now;
-        }
-    });
-    
-    // Apply all updates atomically
-    if (Object.keys(updates).length > 0) {
-        console.log(`Reordering ${phaseProjects.length} projects in ${targetPhase}`, updates);
-        database.ref().update(updates);
-    }
-}
-
-// Move project to end of phase (when dropping on empty space)
-function moveProjectToEndOfPhase(projectId, phase) {
-    const project = projects[projectId];
-    if (!project) return;
-    
-    // Get all projects in phase and add dragged one at the end
-    const phaseProjects = Object.values(projects)
-        .filter(p => p.phase === phase && p.id !== projectId)
-        .sort((a, b) => (a.priority || 999999) - (b.priority || 999999));
-    
-    // Add dragged project at the end
-    phaseProjects.push(project);
-    
-    // Reindex all with priorities 1, 2, 3...
-    const updates = {};
-    const now = new Date().toISOString();
-    
-    phaseProjects.forEach((p, index) => {
-        const newPriority = index + 1;
-        if (p.priority !== newPriority) {
-            updates[`projects/${p.id}/priority`] = newPriority;
-            updates[`projects/${p.id}/updated_at`] = now;
-        }
-    });
-    
-    if (Object.keys(updates).length > 0) {
-        console.log(`Moving to end of ${phase}, updating ${Object.keys(updates).length} priorities`);
-        database.ref().update(updates);
-    }
-}
+// Note: Old reorderProjects and moveProjectToEndOfPhase functions removed
+// Now handled by handleSortableReorder function above
 
 // Show phase transition modal
 function showPhaseTransitionModal(project, newPhase, requirements) {
