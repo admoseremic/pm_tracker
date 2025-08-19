@@ -17,6 +17,7 @@ const database = firebase.database();
 let projects = {};
 let currentDraggedProject = null;
 let transitionProject = null;
+let dragOverElement = null;
 
 // Phase configuration
 const PHASES = {
@@ -161,6 +162,9 @@ function createProjectCard(project) {
     card.addEventListener('click', () => showProjectDetail(project.id));
     card.addEventListener('dragstart', handleDragStart);
     card.addEventListener('dragend', handleDragEnd);
+    card.addEventListener('dragover', handleCardDragOver);
+    card.addEventListener('dragenter', handleCardDragEnter);
+    card.addEventListener('dragleave', handleCardDragLeave);
 
     return card;
 }
@@ -237,10 +241,14 @@ function handleDragStart(e) {
 function handleDragEnd(e) {
     e.target.classList.remove('dragging');
     currentDraggedProject = null;
+    dragOverElement = null;
     
-    // Remove drag-over class from all columns
+    // Remove drag-over classes from all elements
     document.querySelectorAll('.column-content').forEach(col => {
         col.parentElement.classList.remove('drag-over');
+    });
+    document.querySelectorAll('.project-card').forEach(card => {
+        card.classList.remove('drag-over-top', 'drag-over-bottom');
     });
 }
 
@@ -260,27 +268,102 @@ function handleDragLeave(e) {
     }
 }
 
-function handleDrop(e) {
+// Card-specific drag handlers for reordering
+function handleCardDragOver(e) {
     e.preventDefault();
-    const column = e.target.closest('.kanban-column');
-    column.classList.remove('drag-over');
+    e.stopPropagation();
     
     if (!currentDraggedProject) return;
     
-    const newPhase = column.dataset.phase;
-    const project = projects[currentDraggedProject];
+    const card = e.currentTarget;
+    const cardId = card.dataset.projectId;
     
-    if (!project || project.phase === newPhase) return;
+    // Don't show drop indicator on the dragged card itself
+    if (cardId === currentDraggedProject) return;
     
-    // Check if phase transition is valid and requires artifacts
-    const transitionKey = `${project.phase}-${newPhase}`;
-    const requirements = TRANSITION_REQUIREMENTS[transitionKey];
+    const rect = card.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    const isTopHalf = e.clientY < midY;
     
-    if (requirements && !checkTransitionRequirements(project, requirements)) {
-        showPhaseTransitionModal(project, newPhase, requirements);
+    // Remove all drag-over classes from cards
+    document.querySelectorAll('.project-card').forEach(c => {
+        c.classList.remove('drag-over-top', 'drag-over-bottom');
+    });
+    
+    // Add appropriate class
+    if (isTopHalf) {
+        card.classList.add('drag-over-top');
     } else {
-        moveProjectToPhase(currentDraggedProject, newPhase);
+        card.classList.add('drag-over-bottom');
     }
+    
+    dragOverElement = { card, position: isTopHalf ? 'before' : 'after' };
+}
+
+function handleCardDragEnter(e) {
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+function handleCardDragLeave(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const card = e.currentTarget;
+    if (!card.contains(e.relatedTarget)) {
+        card.classList.remove('drag-over-top', 'drag-over-bottom');
+    }
+}
+
+function handleDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const column = e.target.closest('.kanban-column');
+    const card = e.target.closest('.project-card');
+    
+    if (column) {
+        column.classList.remove('drag-over');
+    }
+    
+    if (!currentDraggedProject) return;
+    
+    const project = projects[currentDraggedProject];
+    if (!project) return;
+    
+    // Check if we're dropping on a card (for reordering) or on a column (for phase change)
+    if (card && dragOverElement && card.dataset.projectId !== currentDraggedProject) {
+        // Reordering within same phase or different phase
+        const targetCardId = card.dataset.projectId;
+        const targetProject = projects[targetCardId];
+        
+        if (targetProject) {
+            reorderProjects(currentDraggedProject, targetCardId, dragOverElement.position, targetProject.phase);
+        }
+    } else if (column) {
+        // Dropping on column (phase change or adding to end)
+        const newPhase = column.dataset.phase;
+        
+        if (project.phase !== newPhase) {
+            // Phase change
+            const transitionKey = `${project.phase}-${newPhase}`;
+            const requirements = TRANSITION_REQUIREMENTS[transitionKey];
+            
+            if (requirements && !checkTransitionRequirements(project, requirements)) {
+                showPhaseTransitionModal(project, newPhase, requirements);
+            } else {
+                moveProjectToPhase(currentDraggedProject, newPhase);
+            }
+        } else {
+            // Same phase, move to end
+            moveProjectToEndOfPhase(currentDraggedProject, newPhase);
+        }
+    }
+    
+    // Clean up
+    document.querySelectorAll('.project-card').forEach(c => {
+        c.classList.remove('drag-over-top', 'drag-over-bottom');
+    });
 }
 
 // Check if transition requirements are met
@@ -316,6 +399,132 @@ function moveProjectToPhase(projectId, newPhase) {
     };
     
     database.ref(`projects/${projectId}`).update(updates);
+}
+
+// Reorder projects within or between phases
+function reorderProjects(draggedProjectId, targetProjectId, position, targetPhase) {
+    const draggedProject = projects[draggedProjectId];
+    const targetProject = projects[targetProjectId];
+    
+    if (!draggedProject || !targetProject) return;
+    
+    // Get all projects in the target phase, sorted by priority
+    const phaseProjects = Object.values(projects)
+        .filter(p => p.phase === targetPhase)
+        .sort((a, b) => (b.priority || 0) - (a.priority || 0));
+    
+    // Find the target project's current index
+    const targetIndex = phaseProjects.findIndex(p => p.id === targetProjectId);
+    if (targetIndex === -1) return;
+    
+    // Calculate new priority
+    let newPriority;
+    
+    if (position === 'before') {
+        // Insert before target
+        if (targetIndex === 0) {
+            // Inserting at the top
+            newPriority = (targetProject.priority || 0) + 10;
+        } else {
+            // Insert between previous project and target
+            const prevProject = phaseProjects[targetIndex - 1];
+            newPriority = Math.floor(((prevProject.priority || 0) + (targetProject.priority || 0)) / 2);
+            
+            // If priorities are too close, spread them out
+            if (newPriority === (targetProject.priority || 0) || newPriority === (prevProject.priority || 0)) {
+                rebalancePriorities(targetPhase);
+                // Retry with rebalanced priorities
+                setTimeout(() => reorderProjects(draggedProjectId, targetProjectId, position, targetPhase), 100);
+                return;
+            }
+        }
+    } else {
+        // Insert after target
+        if (targetIndex === phaseProjects.length - 1) {
+            // Inserting at the bottom
+            newPriority = Math.max(0, (targetProject.priority || 0) - 10);
+        } else {
+            // Insert between target and next project
+            const nextProject = phaseProjects[targetIndex + 1];
+            newPriority = Math.floor(((targetProject.priority || 0) + (nextProject.priority || 0)) / 2);
+            
+            // If priorities are too close, spread them out
+            if (newPriority === (targetProject.priority || 0) || newPriority === (nextProject.priority || 0)) {
+                rebalancePriorities(targetPhase);
+                // Retry with rebalanced priorities
+                setTimeout(() => reorderProjects(draggedProjectId, targetProjectId, position, targetPhase), 100);
+                return;
+            }
+        }
+    }
+    
+    // Update the dragged project
+    const updates = {
+        priority: newPriority,
+        updated_at: new Date().toISOString()
+    };
+    
+    // Handle phase change if needed
+    if (draggedProject.phase !== targetPhase) {
+        const transitionKey = `${draggedProject.phase}-${targetPhase}`;
+        const requirements = TRANSITION_REQUIREMENTS[transitionKey];
+        
+        if (requirements && !checkTransitionRequirements(draggedProject, requirements)) {
+            showPhaseTransitionModal(draggedProject, targetPhase, requirements);
+            return;
+        }
+        
+        // Add phase change updates
+        const phaseHistory = draggedProject.phase_history || {};
+        const newHistoryKey = Object.keys(phaseHistory).length.toString();
+        phaseHistory[newHistoryKey] = {
+            phase: targetPhase,
+            entered_at: new Date().toISOString(),
+            entered_by: 'user'
+        };
+        
+        updates.phase = targetPhase;
+        updates.phase_history = phaseHistory;
+    }
+    
+    database.ref(`projects/${draggedProjectId}`).update(updates);
+}
+
+// Move project to end of phase
+function moveProjectToEndOfPhase(projectId, phase) {
+    const project = projects[projectId];
+    if (!project) return;
+    
+    // Find the lowest priority in the phase
+    const phaseProjects = Object.values(projects).filter(p => p.phase === phase);
+    const minPriority = Math.min(...phaseProjects.map(p => p.priority || 0));
+    
+    const updates = {
+        priority: Math.max(0, minPriority - 10),
+        updated_at: new Date().toISOString()
+    };
+    
+    database.ref(`projects/${projectId}`).update(updates);
+}
+
+// Rebalance priorities to spread them out evenly
+function rebalancePriorities(phase) {
+    const phaseProjects = Object.values(projects)
+        .filter(p => p.phase === phase)
+        .sort((a, b) => (b.priority || 0) - (a.priority || 0));
+    
+    const updates = {};
+    phaseProjects.forEach((project, index) => {
+        const newPriority = 100 - (index * 10); // Start at 100, decrease by 10 for each project
+        if (project.priority !== newPriority) {
+            updates[`projects/${project.id}/priority`] = newPriority;
+            updates[`projects/${project.id}/updated_at`] = new Date().toISOString();
+        }
+    });
+    
+    if (Object.keys(updates).length > 0) {
+        database.ref().update(updates);
+    }
 }
 
 // Show phase transition modal
