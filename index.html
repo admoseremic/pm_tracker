@@ -23,11 +23,51 @@
             border-bottom: 1px solid #e0e0e0;
             padding: 1rem 2rem;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .header h1 {
             font-size: 1.5rem;
             font-weight: 600;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            background: #f8f9fa;
+        }
+
+        .connection-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ffc107;
+            animation: pulse 2s infinite;
+        }
+
+        .connection-status.connected .connection-indicator {
+            background: #28a745;
+            animation: none;
+        }
+
+        .connection-status.disconnected .connection-indicator {
+            background: #dc3545;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .connection-text {
+            color: #666;
         }
 
         .toolbar {
@@ -464,6 +504,10 @@
 <body>
     <div class="header">
         <h1>Continuous Product Delivery Dashboard</h1>
+        <div id="connection-status" class="connection-status">
+            <span class="connection-indicator"></span>
+            <span class="connection-text">Connecting...</span>
+        </div>
     </div>
 
     <div class="toolbar">

@@ -52,6 +52,7 @@ const TRANSITION_REQUIREMENTS = {
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
     setupEventListeners();
+    setupConnectionMonitoring();
     loadProjects();
 });
 
@@ -85,6 +86,56 @@ function setupFilterEventListeners() {
     document.getElementById('filter-ux-lead').addEventListener('change', applyFilters);
     document.getElementById('filter-dev-lead').addEventListener('change', applyFilters);
     document.getElementById('filter-phase').addEventListener('change', applyFilters);
+}
+
+// Setup Firebase connection monitoring
+function setupConnectionMonitoring() {
+    const connectedRef = database.ref('.info/connected');
+    const statusElement = document.getElementById('connection-status');
+    const statusText = statusElement?.querySelector('.connection-text');
+    
+    connectedRef.on('value', (snapshot) => {
+        const isConnected = snapshot.val() === true;
+        console.log('Firebase connection status:', isConnected ? 'Connected' : 'Disconnected');
+        
+        // Update visual connection status
+        if (statusElement) {
+            if (isConnected) {
+                statusElement.className = 'connection-status connected';
+                if (statusText) statusText.textContent = 'Connected';
+            } else {
+                statusElement.className = 'connection-status disconnected';
+                if (statusText) statusText.textContent = 'Disconnected';
+            }
+        }
+        
+        if (isConnected) {
+            // When reconnected, ensure data is fresh
+            console.log('Firebase reconnected - refreshing data');
+            
+            // Force a data refresh when reconnecting
+            database.ref('projects').once('value', (projectSnapshot) => {
+                const freshProjects = projectSnapshot.val() || {};
+                if (Object.keys(freshProjects).length > 0) {
+                    projects = freshProjects;
+                    
+                    // Refresh filter dropdowns with the latest data
+                    updateFilterOptions();
+                    
+                    // Reapply current filters
+                    applyFilters();
+                } else {
+                    // Even if no projects, still update filter options to clear them
+                    updateFilterOptions();
+                }
+            });
+        } else {
+            console.log('Firebase disconnected - will reconnect automatically');
+        }
+    });
+    
+    // Also set up presence system to keep connection alive
+    database.goOnline();
 }
 
 // Initialize SortableJS for all columns
@@ -235,6 +286,16 @@ function loadProjects() {
 
 // Update filter dropdown options based on current data
 function updateFilterOptions() {
+    // Check if we have projects data
+    if (!projects || Object.keys(projects).length === 0) {
+        console.log('No projects data available for filter options');
+        // Still initialize empty dropdowns
+        updateFilterDropdown('filter-pm-owner', new Set(), 'All PM Owners');
+        updateFilterDropdown('filter-ux-lead', new Set(), 'All UX Leads');
+        updateFilterDropdown('filter-dev-lead', new Set(), 'All Dev Leads');
+        return;
+    }
+    
     const pmOwners = new Set();
     const uxLeads = new Set();
     const devLeads = new Set();
@@ -250,6 +311,8 @@ function updateFilterOptions() {
             devLeads.add(project.dev_lead.trim());
         }
     });
+    
+    console.log(`Updating filter options: ${pmOwners.size} PMs, ${uxLeads.size} UX, ${devLeads.size} Dev`);
     
     // Update PM Owner dropdown
     updateFilterDropdown('filter-pm-owner', pmOwners, 'All PM Owners');
@@ -1045,11 +1108,4 @@ function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
 
-// Error handling for Firebase
-database.ref('.info/connected').on('value', function(snapshot) {
-    if (snapshot.val() === true) {
-        console.log('Connected to Firebase');
-    } else {
-        console.log('Disconnected from Firebase');
-    }
-});
+// Connection monitoring is now handled in setupConnectionMonitoring()
