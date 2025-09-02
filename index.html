@@ -551,6 +551,51 @@
             box-shadow: none;
         }
 
+        .input-with-suggestions {
+            position: relative;
+        }
+
+        .suggestions-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .suggestions-dropdown.show {
+            display: block;
+        }
+
+        .suggestion-item {
+            padding: 0.5rem 0.75rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+
+        .suggestion-item:hover,
+        .suggestion-item.selected {
+            background-color: #f0f8ff;
+        }
+
+        .suggestion-item.add-new {
+            font-style: italic;
+            color: #666;
+        }
+
         @media (max-width: 768px) {
             .kanban-board {
                 flex-direction: column;
@@ -701,23 +746,35 @@
                         <label class="form-label">Engineering Teams</label>
                         <div class="multi-select-container">
                             <div class="selected-teams" id="selected-teams"></div>
-                            <input type="text" id="engineering-team-input" class="form-input" placeholder="Type team name and press Enter">
+                            <div class="input-with-suggestions">
+                                <input type="text" id="engineering-team-input" class="form-input" placeholder="Type team name or select from list">
+                                <div class="suggestions-dropdown" id="team-suggestions"></div>
+                            </div>
                         </div>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label">PM Owner</label>
-                        <input type="text" id="project-pm-owner" class="form-input">
+                        <div class="input-with-suggestions">
+                            <input type="text" id="project-pm-owner" class="form-input" placeholder="Type name or select from list">
+                            <div class="suggestions-dropdown" id="pm-suggestions"></div>
+                        </div>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label">Dev Lead</label>
-                        <input type="text" id="project-dev-lead" class="form-input">
+                        <div class="input-with-suggestions">
+                            <input type="text" id="project-dev-lead" class="form-input" placeholder="Type name or select from list">
+                            <div class="suggestions-dropdown" id="dev-suggestions"></div>
+                        </div>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label">UX Lead</label>
-                        <input type="text" id="project-ux-lead" class="form-input">
+                        <div class="input-with-suggestions">
+                            <input type="text" id="project-ux-lead" class="form-input" placeholder="Type name or select from list">
+                            <div class="suggestions-dropdown" id="ux-suggestions"></div>
+                        </div>
                     </div>
 
                     <div class="form-group">

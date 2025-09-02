@@ -1150,6 +1150,11 @@ function resetNewProjectModal() {
     document.getElementById('project-priority').value = '';
     document.getElementById('project-jira-link').value = '';
     document.getElementById('selected-teams').innerHTML = '';
+    
+    // Hide all suggestion dropdowns
+    document.querySelectorAll('.suggestions-dropdown').forEach(dropdown => {
+        dropdown.classList.remove('show');
+    });
 }
 
 // Engineering Teams Helper Functions
@@ -1159,13 +1164,20 @@ function setupEngineeringTeamsInput() {
     
     if (!input) return;
     
+    // Setup dropdown suggestions for all input fields
+    setupInputSuggestions('engineering-team-input', 'team-suggestions', getAvailableTeams, true);
+    setupInputSuggestions('project-pm-owner', 'pm-suggestions', getAvailablePMs, false);
+    setupInputSuggestions('project-dev-lead', 'dev-suggestions', getAvailableDevs, false);
+    setupInputSuggestions('project-ux-lead', 'ux-suggestions', getAvailableUX, false);
+    
     input.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             const teamName = input.value.trim();
             if (teamName) {
                 addTeamTag(teamName);
                 input.value = '';
+                document.getElementById('team-suggestions').classList.remove('show');
             }
         }
     });
@@ -1203,6 +1215,145 @@ function setEngineeringTeamsToInput(teams) {
     const container = document.getElementById('selected-teams');
     container.innerHTML = '';
     teams.forEach(team => addTeamTag(team));
+}
+
+// Suggestion System Functions
+function setupInputSuggestions(inputId, dropdownId, getSuggestionsFn, isMultiSelect) {
+    const input = document.getElementById(inputId);
+    const dropdown = document.getElementById(dropdownId);
+    
+    if (!input || !dropdown) return;
+    
+    let selectedIndex = -1;
+    
+    // Show suggestions on focus
+    input.addEventListener('focus', function() {
+        updateSuggestions(input, dropdown, getSuggestionsFn(), isMultiSelect);
+        dropdown.classList.add('show');
+    });
+    
+    // Filter suggestions on input
+    input.addEventListener('input', function() {
+        const value = input.value.toLowerCase();
+        const allSuggestions = getSuggestionsFn();
+        const filtered = value ? allSuggestions.filter(s => s.toLowerCase().includes(value)) : allSuggestions;
+        updateSuggestions(input, dropdown, filtered, isMultiSelect);
+        dropdown.classList.add('show');
+        selectedIndex = -1;
+    });
+    
+    // Handle keyboard navigation
+    input.addEventListener('keydown', function(e) {
+        const items = dropdown.querySelectorAll('.suggestion-item');
+        
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+            updateSelectedSuggestion(items, selectedIndex);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            selectedIndex = Math.max(selectedIndex - 1, -1);
+            updateSelectedSuggestion(items, selectedIndex);
+        } else if (e.key === 'Enter' && selectedIndex >= 0) {
+            e.preventDefault();
+            items[selectedIndex].click();
+        } else if (e.key === 'Escape') {
+            dropdown.classList.remove('show');
+            selectedIndex = -1;
+        }
+    });
+    
+    // Hide suggestions when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.classList.remove('show');
+            selectedIndex = -1;
+        }
+    });
+}
+
+function updateSuggestions(input, dropdown, suggestions, isMultiSelect) {
+    dropdown.innerHTML = '';
+    
+    if (suggestions.length === 0) {
+        const item = document.createElement('div');
+        item.className = 'suggestion-item add-new';
+        item.textContent = 'Type to add new...';
+        dropdown.appendChild(item);
+        return;
+    }
+    
+    suggestions.forEach(suggestion => {
+        const item = document.createElement('div');
+        item.className = 'suggestion-item';
+        item.textContent = suggestion;
+        item.addEventListener('click', function() {
+            if (isMultiSelect) {
+                addTeamTag(suggestion);
+                input.value = '';
+            } else {
+                input.value = suggestion;
+            }
+            dropdown.classList.remove('show');
+        });
+        dropdown.appendChild(item);
+    });
+}
+
+function updateSelectedSuggestion(items, index) {
+    items.forEach((item, i) => {
+        if (i === index) {
+            item.classList.add('selected');
+        } else {
+            item.classList.remove('selected');
+        }
+    });
+}
+
+// Get available values from existing projects
+function getAvailableTeams() {
+    const teams = new Set();
+    Object.values(projects).forEach(project => {
+        if (project.engineering_teams && Array.isArray(project.engineering_teams)) {
+            project.engineering_teams.forEach(team => {
+                if (team && team.trim()) teams.add(team.trim());
+            });
+        }
+    });
+    
+    // Filter out already selected teams
+    const selectedTeams = getEngineeringTeamsFromInput();
+    return Array.from(teams).filter(team => !selectedTeams.includes(team)).sort();
+}
+
+function getAvailablePMs() {
+    const pms = new Set();
+    Object.values(projects).forEach(project => {
+        if (project.pm_owner && project.pm_owner.trim()) {
+            pms.add(project.pm_owner.trim());
+        }
+    });
+    return Array.from(pms).sort();
+}
+
+function getAvailableDevs() {
+    const devs = new Set();
+    Object.values(projects).forEach(project => {
+        if (project.dev_lead && project.dev_lead.trim()) {
+            devs.add(project.dev_lead.trim());
+        }
+    });
+    return Array.from(devs).sort();
+}
+
+function getAvailableUX() {
+    const ux = new Set();
+    Object.values(projects).forEach(project => {
+        if (project.ux_lead && project.ux_lead.trim()) {
+            ux.add(project.ux_lead.trim());
+        }
+    });
+    return Array.from(ux).sort();
 }
 
 // Delete project
