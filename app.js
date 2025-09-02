@@ -77,11 +77,15 @@ function setupEventListeners() {
     
     // Setup filter event listeners
     setupFilterEventListeners();
+    
+    // Setup engineering teams input
+    setupEngineeringTeamsInput();
 }
 
 // Setup filter event listeners
 function setupFilterEventListeners() {
     // Filter dropdowns
+    document.getElementById('filter-engineering-team').addEventListener('change', applyFilters);
     document.getElementById('filter-pm-owner').addEventListener('change', applyFilters);
     document.getElementById('filter-ux-lead').addEventListener('change', applyFilters);
     document.getElementById('filter-dev-lead').addEventListener('change', applyFilters);
@@ -290,17 +294,26 @@ function updateFilterOptions() {
     if (!projects || Object.keys(projects).length === 0) {
         console.log('No projects data available for filter options');
         // Still initialize empty dropdowns
+        updateFilterDropdown('filter-engineering-team', new Set(), 'All Teams');
         updateFilterDropdown('filter-pm-owner', new Set(), 'All PM Owners');
         updateFilterDropdown('filter-ux-lead', new Set(), 'All UX Leads');
         updateFilterDropdown('filter-dev-lead', new Set(), 'All Dev Leads');
         return;
     }
     
+    const engineeringTeams = new Set();
     const pmOwners = new Set();
     const uxLeads = new Set();
     const devLeads = new Set();
     
     Object.values(projects).forEach(project => {
+        if (project.engineering_teams && Array.isArray(project.engineering_teams)) {
+            project.engineering_teams.forEach(team => {
+                if (team && team.trim()) {
+                    engineeringTeams.add(team.trim());
+                }
+            });
+        }
         if (project.pm_owner && project.pm_owner.trim()) {
             pmOwners.add(project.pm_owner.trim());
         }
@@ -312,9 +325,10 @@ function updateFilterOptions() {
         }
     });
     
-    console.log(`Updating filter options: ${pmOwners.size} PMs, ${uxLeads.size} UX, ${devLeads.size} Dev`);
+    console.log(`Updating filter options: ${engineeringTeams.size} Teams, ${pmOwners.size} PMs, ${uxLeads.size} UX, ${devLeads.size} Dev`);
     
-    // Update PM Owner dropdown
+    // Update dropdowns
+    updateFilterDropdown('filter-engineering-team', engineeringTeams, 'All Teams');
     updateFilterDropdown('filter-pm-owner', pmOwners, 'All PM Owners');
     updateFilterDropdown('filter-ux-lead', uxLeads, 'All UX Leads');
     updateFilterDropdown('filter-dev-lead', devLeads, 'All Dev Leads');
@@ -347,6 +361,7 @@ function updateFilterDropdown(elementId, optionsSet, defaultText) {
 function applyFilters() {
     // Get current filter values
     const filters = {
+        engineering_team: document.getElementById('filter-engineering-team').value,
         pm_owner: document.getElementById('filter-pm-owner').value,
         ux_lead: document.getElementById('filter-ux-lead').value,
         dev_lead: document.getElementById('filter-dev-lead').value,
@@ -372,6 +387,16 @@ function applyFilters() {
 // Check if a project passes the current filters (INTERSECTION/AND logic)
 function passesFilters(project, filters) {
     // All filters must pass for the project to be included (AND logic)
+    
+    // Engineering Team filter - project must include the selected team
+    if (filters.engineering_team) {
+        if (!project.engineering_teams || !Array.isArray(project.engineering_teams)) {
+            return false;
+        }
+        if (!project.engineering_teams.includes(filters.engineering_team)) {
+            return false;
+        }
+    }
     
     // PM Owner filter - project must match selected PM owner
     if (filters.pm_owner && project.pm_owner !== filters.pm_owner) {
@@ -838,6 +863,19 @@ function showProjectDetail(projectId) {
                 <div><strong>Priority:</strong> ${project.priority || 0}</div>
             </div>
             
+            ${project.engineering_teams && project.engineering_teams.length > 0 ? `
+                <div style="margin-bottom: 1.5rem;">
+                    <strong>Engineering Teams:</strong>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
+                        ${project.engineering_teams.map(team => `
+                            <span style="background: #007bff; color: white; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.875rem;">
+                                ${team}
+                            </span>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+            
             ${project.description ? `
                 <div style="margin-bottom: 1.5rem;">
                     <strong>Description:</strong>
@@ -943,6 +981,7 @@ function createProject() {
         ux_lead: document.getElementById('project-ux-lead').value.trim(),
         loe_estimate: document.getElementById('project-loe').value.trim(),
         jira_link: document.getElementById('project-jira-link').value.trim(),
+        engineering_teams: getEngineeringTeamsFromInput(),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         phase_history: {
@@ -986,6 +1025,7 @@ function editProject(projectId) {
     document.getElementById('project-ux-lead').value = project.ux_lead || '';
     document.getElementById('project-loe').value = project.loe_estimate || '';
     document.getElementById('project-jira-link').value = project.jira_link || '';
+    setEngineeringTeamsToInput(project.engineering_teams || []);
     
     // Show priority field for editing and populate it
     document.getElementById('priority-group').style.display = 'block';
@@ -1021,6 +1061,7 @@ function updateProject(projectId) {
         ux_lead: document.getElementById('project-ux-lead').value.trim(),
         loe_estimate: document.getElementById('project-loe').value.trim(),
         jira_link: document.getElementById('project-jira-link').value.trim(),
+        engineering_teams: getEngineeringTeamsFromInput(),
         updated_at: new Date().toISOString()
     };
     
@@ -1108,6 +1149,60 @@ function resetNewProjectModal() {
     document.getElementById('priority-group').style.display = 'none';
     document.getElementById('project-priority').value = '';
     document.getElementById('project-jira-link').value = '';
+    document.getElementById('selected-teams').innerHTML = '';
+}
+
+// Engineering Teams Helper Functions
+function setupEngineeringTeamsInput() {
+    const input = document.getElementById('engineering-team-input');
+    const container = document.getElementById('selected-teams');
+    
+    if (!input) return;
+    
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const teamName = input.value.trim();
+            if (teamName) {
+                addTeamTag(teamName);
+                input.value = '';
+            }
+        }
+    });
+}
+
+function addTeamTag(teamName) {
+    const container = document.getElementById('selected-teams');
+    const existingTags = Array.from(container.querySelectorAll('.team-tag')).map(tag => 
+        tag.querySelector('span').textContent
+    );
+    
+    if (!existingTags.includes(teamName)) {
+        const tag = document.createElement('div');
+        tag.className = 'team-tag';
+        tag.innerHTML = `
+            <span>${teamName}</span>
+            <button class="remove-tag" onclick="removeTeamTag(this)">×</button>
+        `;
+        container.appendChild(tag);
+    }
+}
+
+function removeTeamTag(button) {
+    button.parentElement.remove();
+}
+
+function getEngineeringTeamsFromInput() {
+    const container = document.getElementById('selected-teams');
+    return Array.from(container.querySelectorAll('.team-tag')).map(tag => 
+        tag.querySelector('span').textContent
+    );
+}
+
+function setEngineeringTeamsToInput(teams) {
+    const container = document.getElementById('selected-teams');
+    container.innerHTML = '';
+    teams.forEach(team => addTeamTag(team));
 }
 
 // Delete project

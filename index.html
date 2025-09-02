@@ -494,6 +494,63 @@
             display: inline-block;
         }
 
+        .multi-select-container {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 0.5rem;
+            background: white;
+        }
+
+        .selected-teams {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+            min-height: 1rem;
+        }
+
+        .selected-teams:empty {
+            margin-bottom: 0;
+        }
+
+        .team-tag {
+            background: #007bff;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .team-tag .remove-tag {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 1.25rem;
+            line-height: 1;
+            padding: 0;
+            margin-left: 0.25rem;
+            opacity: 0.8;
+        }
+
+        .team-tag .remove-tag:hover {
+            opacity: 1;
+        }
+
+        .multi-select-container .form-input {
+            border: none;
+            padding: 0.25rem 0;
+            margin: 0;
+        }
+
+        .multi-select-container .form-input:focus {
+            outline: none;
+            box-shadow: none;
+        }
+
         @media (max-width: 768px) {
             .kanban-board {
                 flex-direction: column;
@@ -524,6 +581,9 @@
     <div class="toolbar">
         <div class="filter-section">
             <div class="filter-controls">
+                <select id="filter-engineering-team" class="filter-select">
+                    <option value="">All Teams</option>
+                </select>
                 <select id="filter-pm-owner" class="filter-select">
                     <option value="">All PM Owners</option>
                 </select>
@@ -635,6 +695,14 @@
                     <div class="form-group" id="priority-group" style="display: none;">
                         <label class="form-label">Priority (1 = top of list)</label>
                         <input type="number" id="project-priority" class="form-input" min="1" placeholder="Auto-assigned">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Engineering Teams</label>
+                        <div class="multi-select-container">
+                            <div class="selected-teams" id="selected-teams"></div>
+                            <input type="text" id="engineering-team-input" class="form-input" placeholder="Type team name and press Enter">
+                        </div>
                     </div>
 
                     <div class="form-group">
