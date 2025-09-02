@@ -543,7 +543,16 @@ function createProjectCard(project) {
     const loeSize = getLOESize(project.loe_estimate);
     
     card.innerHTML = `
-        <div class="project-title">${project.title || 'Untitled Project'}</div>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div class="project-title" style="flex: 1;">${project.title || 'Untitled Project'}</div>
+            ${project.jira_link ? `
+                <a href="${project.jira_link}" target="_blank" class="jira-link" onclick="event.stopPropagation();" title="View in Jira">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                    </svg>
+                </a>
+            ` : ''}
+        </div>
         <div class="project-meta">
             <div class="meta-item">
                 <span class="icon">👤</span>
@@ -836,6 +845,15 @@ function showProjectDetail(projectId) {
                 </div>
             ` : ''}
             
+            ${project.jira_link ? `
+                <div style="margin-bottom: 1.5rem;">
+                    <strong>Jira Issue:</strong>
+                    <a href="${project.jira_link}" target="_blank" style="color: #007bff; margin-left: 0.5rem;">
+                        View in Jira →
+                    </a>
+                </div>
+            ` : ''}
+            
             <div style="margin-bottom: 1.5rem;">
                 <strong>Project Artifacts:</strong>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 0.5rem; margin-top: 0.5rem;">
@@ -924,6 +942,7 @@ function createProject() {
         dev_lead: document.getElementById('project-dev-lead').value.trim(),
         ux_lead: document.getElementById('project-ux-lead').value.trim(),
         loe_estimate: document.getElementById('project-loe').value.trim(),
+        jira_link: document.getElementById('project-jira-link').value.trim(),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         phase_history: {
@@ -966,6 +985,7 @@ function editProject(projectId) {
     document.getElementById('project-dev-lead').value = project.dev_lead || '';
     document.getElementById('project-ux-lead').value = project.ux_lead || '';
     document.getElementById('project-loe').value = project.loe_estimate || '';
+    document.getElementById('project-jira-link').value = project.jira_link || '';
     
     // Show priority field for editing and populate it
     document.getElementById('priority-group').style.display = 'block';
@@ -1000,6 +1020,7 @@ function updateProject(projectId) {
         dev_lead: document.getElementById('project-dev-lead').value.trim(),
         ux_lead: document.getElementById('project-ux-lead').value.trim(),
         loe_estimate: document.getElementById('project-loe').value.trim(),
+        jira_link: document.getElementById('project-jira-link').value.trim(),
         updated_at: new Date().toISOString()
     };
     
@@ -1086,6 +1107,7 @@ function resetNewProjectModal() {
     // Hide priority field (only shown for editing)
     document.getElementById('priority-group').style.display = 'none';
     document.getElementById('project-priority').value = '';
+    document.getElementById('project-jira-link').value = '';
 }
 
 // Delete project
