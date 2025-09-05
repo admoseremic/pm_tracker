@@ -87,9 +87,6 @@ function setupFilterEventListeners() {
     // Filter dropdowns
     document.getElementById('filter-engineering-team').addEventListener('change', applyFilters);
     document.getElementById('filter-pm-owner').addEventListener('change', applyFilters);
-    document.getElementById('filter-ux-lead').addEventListener('change', applyFilters);
-    document.getElementById('filter-dev-lead').addEventListener('change', applyFilters);
-    document.getElementById('filter-phase').addEventListener('change', applyFilters);
 }
 
 // Setup Firebase connection monitoring
@@ -296,15 +293,11 @@ function updateFilterOptions() {
         // Still initialize empty dropdowns
         updateFilterDropdown('filter-engineering-team', new Set(), 'All Teams');
         updateFilterDropdown('filter-pm-owner', new Set(), 'All PM Owners');
-        updateFilterDropdown('filter-ux-lead', new Set(), 'All UX Leads');
-        updateFilterDropdown('filter-dev-lead', new Set(), 'All Dev Leads');
         return;
     }
     
     const engineeringTeams = new Set();
     const pmOwners = new Set();
-    const uxLeads = new Set();
-    const devLeads = new Set();
     
     Object.values(projects).forEach(project => {
         if (project.engineering_teams && Array.isArray(project.engineering_teams)) {
@@ -317,21 +310,13 @@ function updateFilterOptions() {
         if (project.pm_owner && project.pm_owner.trim()) {
             pmOwners.add(project.pm_owner.trim());
         }
-        if (project.ux_lead && project.ux_lead.trim()) {
-            uxLeads.add(project.ux_lead.trim());
-        }
-        if (project.dev_lead && project.dev_lead.trim()) {
-            devLeads.add(project.dev_lead.trim());
-        }
     });
     
-    console.log(`Updating filter options: ${engineeringTeams.size} Teams, ${pmOwners.size} PMs, ${uxLeads.size} UX, ${devLeads.size} Dev`);
+    console.log(`Updating filter options: ${engineeringTeams.size} Teams, ${pmOwners.size} PMs`);
     
     // Update dropdowns
     updateFilterDropdown('filter-engineering-team', engineeringTeams, 'All Teams');
     updateFilterDropdown('filter-pm-owner', pmOwners, 'All PM Owners');
-    updateFilterDropdown('filter-ux-lead', uxLeads, 'All UX Leads');
-    updateFilterDropdown('filter-dev-lead', devLeads, 'All Dev Leads');
 }
 
 // Update a specific filter dropdown with options
@@ -363,9 +348,6 @@ function applyFilters() {
     const filters = {
         engineering_team: document.getElementById('filter-engineering-team').value,
         pm_owner: document.getElementById('filter-pm-owner').value,
-        ux_lead: document.getElementById('filter-ux-lead').value,
-        dev_lead: document.getElementById('filter-dev-lead').value,
-        phase: document.getElementById('filter-phase').value
     };
     
     currentFilters = filters;
@@ -403,20 +385,6 @@ function passesFilters(project, filters) {
         return false;
     }
     
-    // UX Lead filter - project must match selected UX lead
-    if (filters.ux_lead && project.ux_lead !== filters.ux_lead) {
-        return false;
-    }
-    
-    // Dev Lead filter - project must match selected dev lead
-    if (filters.dev_lead && project.dev_lead !== filters.dev_lead) {
-        return false;
-    }
-    
-    // Phase filter - project must be in selected phase
-    if (filters.phase && project.phase !== filters.phase) {
-        return false;
-    }
     
     // If we get here, the project passes all active filters
     return true;
@@ -431,9 +399,7 @@ function updateFilterStatus() {
     // Build list of active filters for display
     const activeFilters = [];
     if (currentFilters.pm_owner) activeFilters.push(`PM: ${currentFilters.pm_owner}`);
-    if (currentFilters.ux_lead) activeFilters.push(`UX: ${currentFilters.ux_lead}`);
-    if (currentFilters.dev_lead) activeFilters.push(`Dev: ${currentFilters.dev_lead}`);
-    if (currentFilters.phase) activeFilters.push(`Phase: ${PHASES[currentFilters.phase]?.name || currentFilters.phase}`);
+    if (currentFilters.engineering_team) activeFilters.push(`Team: ${currentFilters.engineering_team}`);
     
     if (totalProjects === filteredCount) {
         statusElement.textContent = `Showing all ${totalProjects} projects`;
@@ -446,9 +412,6 @@ function updateFilterStatus() {
 // Clear all filters
 function clearAllFilters() {
     document.getElementById('filter-pm-owner').value = '';
-    document.getElementById('filter-ux-lead').value = '';
-    document.getElementById('filter-dev-lead').value = '';
-    document.getElementById('filter-phase').value = '';
     
     // Clear any active quick filter buttons
     document.querySelectorAll('.quick-filter-btn').forEach(btn => {
