@@ -516,7 +516,8 @@ function renderProjects() {
 
     // Use filtered projects, or empty object if no matches (don't fallback to all projects)
     const hasActiveFilters = Object.values(currentFilters).some(filter => filter && filter.trim());
-    const projectsToRender = hasActiveFilters ? filteredProjects : projects;
+    const hasQuickFilter = document.querySelector('.quick-filter-btn.active') !== null;
+    const projectsToRender = (hasActiveFilters || hasQuickFilter) ? filteredProjects : projects;
 
     // Sort projects by priority within each phase
     const projectsByPhase = {};
@@ -689,28 +690,72 @@ function applyQuickFilter(filterType) {
     
     // Apply the specific quick filter
     switch (filterType) {
-        case 'my-projects':
-            // This would need user context - for now, just show all
-            // TODO: Implement when user authentication is added
+        case 'classic-apps':
+            // Filter to Classic Apps teams
+            const classicTeams = ['BIRT', 'Cognos', 'Data Views', 'Healthcare Productivity', 'KPI Data Platform'];
+            applyTeamFilter(classicTeams);
             break;
             
-        case 'needs-validation':
-            // Show discovery projects with incomplete validation
-            document.getElementById('filter-phase').value = 'discovery';
+        case 'modern-reporting':
+            // Filter to Modern Reporting teams
+            const modernTeams = ['Conversational Reporting', 'Looker', 'Reporting Hub'];
+            applyTeamFilter(modernTeams);
             break;
             
-        case 'ready-soon':
-            // Show planning and ready projects
-            document.getElementById('filter-phase').value = 'ready';
-            break;
-            
-        case 'overdue':
-            // This would need milestone date logic - for now, just show all
-            // TODO: Implement milestone date comparison
+        case 'planning-overdue':
+            // Filter to projects in planning phase for more than 2 weeks
+            filterPlanningOverdue();
             break;
     }
     
     applyFilters();
+}
+
+// Helper function to apply team filters for quick filters
+function applyTeamFilter(teams) {
+    // Clear existing filters and set custom filter logic
+    filteredProjects = {};
+    Object.values(projects).forEach(project => {
+        if (project.engineering_teams && Array.isArray(project.engineering_teams)) {
+            // Check if project has any of the specified teams
+            const hasMatchingTeam = project.engineering_teams.some(team => 
+                teams.includes(team)
+            );
+            if (hasMatchingTeam) {
+                filteredProjects[project.id] = project;
+            }
+        }
+    });
+    
+    // Update the filter status text
+    const teamNames = teams.length > 2 ? `${teams[0]} and others` : teams.join(' and ');
+    document.getElementById('filter-status').textContent = `Showing ${teamNames} projects`;
+}
+
+// Helper function to filter planning overdue projects
+function filterPlanningOverdue() {
+    filteredProjects = {};
+    const twoWeeksAgo = new Date();
+    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+    
+    Object.values(projects).forEach(project => {
+        if (project.phase === 'planning' && project.phase_history) {
+            // Find when the project entered the planning phase
+            const history = Object.values(project.phase_history);
+            const planningEntry = history.find(entry => entry.phase === 'planning');
+            
+            if (planningEntry && planningEntry.entered_at) {
+                const enteredDate = new Date(planningEntry.entered_at);
+                if (enteredDate < twoWeeksAgo) {
+                    filteredProjects[project.id] = project;
+                }
+            }
+        }
+    });
+    
+    // Update the filter status text
+    const count = Object.keys(filteredProjects).length;
+    document.getElementById('filter-status').textContent = `Showing ${count} project${count !== 1 ? 's' : ''} in planning for >2 weeks`;
 }
 
 // Note: Drag and drop is now handled by SortableJS
