@@ -275,6 +275,7 @@ function handleSortableReorder(projectId, targetPhase, newIndex, referenceAboveI
         // Placed between two cards
         const abovePriority = projects[referenceAboveId]?.priority || 1;
         const belowPriority = projects[referenceBelowId]?.priority || abovePriority + 2;
+        const originalPriority = draggedProject.priority || 999999;
         
         if (belowPriority - abovePriority === 1) {
             // No gap - need to make room
@@ -288,8 +289,16 @@ function handleSortableReorder(projectId, targetPhase, newIndex, referenceAboveI
                 }
             });
         } else {
-            // There's a gap - place in the middle
-            targetPriority = abovePriority + 1;
+            // There's a gap - determine position based on movement direction
+            const movingUp = originalPriority > belowPriority;
+            
+            if (movingUp) {
+                // Moving up - place immediately above the reference card below
+                targetPriority = belowPriority - 1;
+            } else {
+                // Moving down - place immediately below the reference card above
+                targetPriority = abovePriority + 1;
+            }
         }
     }
     
