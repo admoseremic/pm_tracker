@@ -656,13 +656,13 @@ function applyQuickFilter(filterType) {
     switch (filterType) {
         case 'classic-apps':
             // Filter to Classic Apps teams
-            const classicTeams = ['BIRT', 'Cognos', 'Data Views', 'Healthcare Productivity', 'KPI Data Platform'];
+            const classicTeams = ['BIRT', 'Cognos', 'Dataviews', 'Healthcare Productivity', 'KPI Data Platform'];
             applyTeamFilter(classicTeams);
             break;
             
         case 'modern-reporting':
             // Filter to Modern Reporting teams
-            const modernTeams = ['Conversational Reporting', 'Looker', 'Reporting Hub'];
+            const modernTeams = ['Conversational', 'Looker', 'Reporting Hub'];
             applyTeamFilter(modernTeams);
             break;
             
