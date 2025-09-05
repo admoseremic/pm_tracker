@@ -708,7 +708,8 @@ function applyQuickFilter(filterType) {
             break;
     }
     
-    applyFilters();
+    // Don't call applyFilters() here as it would overwrite our custom filtering
+    renderProjects();
 }
 
 // Helper function to apply team filters for quick filters
@@ -728,8 +729,9 @@ function applyTeamFilter(teams) {
     });
     
     // Update the filter status text
+    const count = Object.keys(filteredProjects).length;
     const teamNames = teams.length > 2 ? `${teams[0]} and others` : teams.join(' and ');
-    document.getElementById('filter-status').textContent = `Showing ${teamNames} projects`;
+    document.getElementById('filter-status').textContent = `Showing ${count} ${teamNames} project${count !== 1 ? 's' : ''}`;
 }
 
 // Helper function to filter planning overdue projects
