@@ -411,6 +411,7 @@ function updateFilterStatus() {
 
 // Clear all filters
 function clearAllFilters() {
+    document.getElementById('filter-engineering-team').value = '';
     document.getElementById('filter-pm-owner').value = '';
     
     // Clear any active quick filter buttons
