@@ -197,7 +197,12 @@ function handleSortableMove(evt) {
         return;
     }
     
-    console.log(`Moving ${projects[projectId].title} from ${oldPhase} to ${newPhase} at position ${newIndex + 1}`);
+    // Get the visible cards in the target column to determine reference points
+    const visibleCards = Array.from(evt.to.children);
+    const cardAbove = newIndex > 0 ? visibleCards[newIndex - 1] : null;
+    const cardBelow = visibleCards[newIndex + 1] || null; // Card that was pushed down
+    
+    console.log(`Moving ${projects[projectId].title} from ${oldPhase} to ${newPhase} at visual position ${newIndex + 1}`);
     
     // If moving to a different phase, check transition requirements
     if (oldPhase !== newPhase) {
@@ -213,54 +218,98 @@ function handleSortableMove(evt) {
         }
     }
     
+    // Pass reference cards for smart priority assignment
+    const referenceAboveId = cardAbove ? cardAbove.dataset.projectId : null;
+    const referenceBelowId = cardBelow ? cardBelow.dataset.projectId : null;
+    
     // Handle the reordering with batch updates
-    handleSortableReorder(projectId, newPhase, newIndex);
+    handleSortableReorder(projectId, newPhase, newIndex, referenceAboveId, referenceBelowId);
 }
 
 // Handle reordering after SortableJS move
-function handleSortableReorder(projectId, targetPhase, newIndex) {
+function handleSortableReorder(projectId, targetPhase, newIndex, referenceAboveId, referenceBelowId) {
     const draggedProject = projects[projectId];
     if (!draggedProject) return;
     
-    // Get all projects in the target phase (including the dragged one if same phase)
+    // Get all projects in the target phase (excluding the dragged one)
     let phaseProjects = Object.values(projects)
         .filter(p => p.phase === targetPhase && p.id !== projectId)
         .sort((a, b) => (a.priority || 999999) - (b.priority || 999999));
     
-    // Insert the dragged project at the new position
-    phaseProjects.splice(newIndex, 0, draggedProject);
-    
-    // Batch update all priorities
-    const updates = {};
+    // Determine the target priority based on reference cards
+    let targetPriority;
     const now = new Date().toISOString();
+    const updates = {};
     
-    phaseProjects.forEach((project, index) => {
-        const newPriority = index + 1;
+    if (phaseProjects.length === 0) {
+        // First project in this phase
+        targetPriority = 1;
+    } else if (!referenceAboveId && !referenceBelowId) {
+        // Edge case: no reference points (shouldn't happen in normal operation)
+        targetPriority = newIndex + 1;
+    } else if (!referenceAboveId) {
+        // Placed at the top - set priority to be less than the card below
+        const belowPriority = projects[referenceBelowId]?.priority || 1;
+        targetPriority = Math.max(1, belowPriority - 1);
         
-        if (project.id === projectId) {
-            // Update the dragged project (may include phase change)
-            updates[`projects/${project.id}/priority`] = newPriority;
-            updates[`projects/${project.id}/updated_at`] = now;
-            
-            if (draggedProject.phase !== targetPhase) {
-                // Add phase change updates
-                const phaseHistory = draggedProject.phase_history || {};
-                const newHistoryKey = Object.keys(phaseHistory).length.toString();
-                phaseHistory[newHistoryKey] = {
-                    phase: targetPhase,
-                    entered_at: now,
-                    entered_by: 'user'
-                };
-                
-                updates[`projects/${project.id}/phase`] = targetPhase;
-                updates[`projects/${project.id}/phase_history`] = phaseHistory;
+        // Shift all projects with priority >= targetPriority up by 1
+        phaseProjects.forEach(project => {
+            if (project.priority >= targetPriority) {
+                updates[`projects/${project.id}/priority`] = project.priority + 1;
+                updates[`projects/${project.id}/updated_at`] = now;
             }
-        } else if (project.priority !== newPriority) {
-            // Only update if priority actually changed
-            updates[`projects/${project.id}/priority`] = newPriority;
-            updates[`projects/${project.id}/updated_at`] = now;
+        });
+    } else if (!referenceBelowId) {
+        // Placed at the bottom - set priority to be greater than the card above
+        const abovePriority = projects[referenceAboveId]?.priority || 1;
+        targetPriority = abovePriority + 1;
+        
+        // Shift all projects with priority > abovePriority up by 1
+        phaseProjects.forEach(project => {
+            if (project.priority > abovePriority) {
+                updates[`projects/${project.id}/priority`] = project.priority + 1;
+                updates[`projects/${project.id}/updated_at`] = now;
+            }
+        });
+    } else {
+        // Placed between two cards
+        const abovePriority = projects[referenceAboveId]?.priority || 1;
+        const belowPriority = projects[referenceBelowId]?.priority || abovePriority + 2;
+        
+        if (belowPriority - abovePriority === 1) {
+            // No gap - need to make room
+            targetPriority = belowPriority;
+            
+            // Shift all projects with priority >= belowPriority up by 1
+            phaseProjects.forEach(project => {
+                if (project.priority >= belowPriority) {
+                    updates[`projects/${project.id}/priority`] = project.priority + 1;
+                    updates[`projects/${project.id}/updated_at`] = now;
+                }
+            });
+        } else {
+            // There's a gap - place in the middle
+            targetPriority = abovePriority + 1;
         }
-    });
+    }
+    
+    // Update the dragged project
+    updates[`projects/${projectId}/priority`] = targetPriority;
+    updates[`projects/${projectId}/updated_at`] = now;
+    
+    if (draggedProject.phase !== targetPhase) {
+        // Add phase change updates
+        const phaseHistory = draggedProject.phase_history || {};
+        const newHistoryKey = Object.keys(phaseHistory).length.toString();
+        phaseHistory[newHistoryKey] = {
+            phase: targetPhase,
+            entered_at: now,
+            entered_by: 'user'
+        };
+        
+        updates[`projects/${projectId}/phase`] = targetPhase;
+        updates[`projects/${projectId}/phase_history`] = phaseHistory;
+    }
     
     // Apply all updates atomically
     if (Object.keys(updates).length > 0) {
