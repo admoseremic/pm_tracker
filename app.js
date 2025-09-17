@@ -740,17 +740,37 @@ function applyQuickFilter(filterType) {
 function applyTeamFilter(teams) {
     // Clear existing filters and set custom filter logic
     filteredProjects = {};
+    
+    // Debug: Log what we're filtering for
+    console.log('Filtering for teams:', teams);
+    
+    // Debug: Track Dataviews projects specifically
+    const dataviewsProjects = [];
+    
     Object.values(projects).forEach(project => {
         if (project.engineering_teams && Array.isArray(project.engineering_teams)) {
+            // Debug: Check for Dataviews specifically
+            if (project.engineering_teams.some(t => t.includes('Dataview'))) {
+                console.log(`Project "${project.name}" has Dataview-related team:`, project.engineering_teams);
+                dataviewsProjects.push(project.name);
+            }
+            
             // Check if project has any of the specified teams
-            const hasMatchingTeam = project.engineering_teams.some(team => 
-                teams.includes(team)
-            );
+            const hasMatchingTeam = project.engineering_teams.some(team => {
+                const matches = teams.includes(team);
+                if (team.includes('Dataview') && !matches) {
+                    console.log(`Team "${team}" doesn't match filter (looking for "Dataviews")`);
+                }
+                return matches;
+            });
             if (hasMatchingTeam) {
                 filteredProjects[project.id] = project;
             }
         }
     });
+    
+    console.log(`Found ${dataviewsProjects.length} Dataview-related projects:`, dataviewsProjects);
+    console.log(`Total filtered projects: ${Object.keys(filteredProjects).length}`);
     
     // Update the filter status text
     const count = Object.keys(filteredProjects).length;
