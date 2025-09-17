@@ -468,7 +468,7 @@ function updateFilterStatus() {
 }
 
 // Clear all filters
-function clearAllFilters() {
+function clearAllFilters(skipApply = false) {
     document.getElementById('filter-engineering-team').value = '';
     document.getElementById('filter-pm-owner').value = '';
     
@@ -477,7 +477,9 @@ function clearAllFilters() {
         btn.classList.remove('active');
     });
     
-    applyFilters();
+    if (!skipApply) {
+        applyFilters();
+    }
 }
 
 // Fix negative or problematic priorities - renumber to 1, 2, 3...
@@ -704,8 +706,8 @@ function applyQuickFilter(filterType) {
         return;
     }
     
-    // Clear existing filters first
-    clearAllFilters();
+    // Clear existing filters first (skip applyFilters since we'll render after setting quick filter)
+    clearAllFilters(true);
     
     // Add active class to clicked button (clearAllFilters removes all active classes)
     clickedButton.classList.add('active');
