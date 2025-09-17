@@ -697,11 +697,13 @@ function updateProjectCounts() {
 
 // Quick filter implementations
 function applyQuickFilter(filterType) {
+    console.log('applyQuickFilter called with:', filterType);
     const clickedButton = event.target;
     
     // Check if this quick filter is already active
     if (clickedButton.classList.contains('active')) {
         // Unclick: clear all filters and remove active state
+        console.log('Filter already active, clearing...');
         clearAllFilters();
         return;
     }
@@ -715,6 +717,8 @@ function applyQuickFilter(filterType) {
     // Apply the specific quick filter
     switch (filterType) {
         case 'classic-apps':
+            console.log('Applying Classic Apps filter');
+            alert('Classic Apps filter clicked! Check console for details.');
             // Filter to Classic Apps teams
             const classicTeams = ['BIRT', 'Cognos', 'Dataviews', 'Healthcare Productivity', 'KPI Data Platform'];
             applyTeamFilter(classicTeams);
