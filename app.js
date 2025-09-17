@@ -697,13 +697,11 @@ function updateProjectCounts() {
 
 // Quick filter implementations
 function applyQuickFilter(filterType) {
-    console.log('applyQuickFilter called with:', filterType);
     const clickedButton = event.target;
     
     // Check if this quick filter is already active
     if (clickedButton.classList.contains('active')) {
         // Unclick: clear all filters and remove active state
-        console.log('Filter already active, clearing...');
         clearAllFilters();
         return;
     }
@@ -717,8 +715,6 @@ function applyQuickFilter(filterType) {
     // Apply the specific quick filter
     switch (filterType) {
         case 'classic-apps':
-            console.log('Applying Classic Apps filter');
-            alert('Classic Apps filter clicked! Check console for details.');
             // Filter to Classic Apps teams
             const classicTeams = ['BIRT', 'Cognos', 'Dataviews', 'Healthcare Productivity', 'KPI Data Platform'];
             applyTeamFilter(classicTeams);
@@ -744,37 +740,17 @@ function applyQuickFilter(filterType) {
 function applyTeamFilter(teams) {
     // Clear existing filters and set custom filter logic
     filteredProjects = {};
-    
-    // Debug: Log what we're filtering for
-    console.log('Filtering for teams:', teams);
-    
-    // Debug: Track Dataviews projects specifically
-    const dataviewsProjects = [];
-    
     Object.values(projects).forEach(project => {
         if (project.engineering_teams && Array.isArray(project.engineering_teams)) {
-            // Debug: Check for Dataviews specifically
-            if (project.engineering_teams.some(t => t.includes('Dataview'))) {
-                console.log(`Project "${project.name}" has Dataview-related team:`, project.engineering_teams);
-                dataviewsProjects.push(project.name);
-            }
-            
             // Check if project has any of the specified teams
-            const hasMatchingTeam = project.engineering_teams.some(team => {
-                const matches = teams.includes(team);
-                if (team.includes('Dataview') && !matches) {
-                    console.log(`Team "${team}" doesn't match filter (looking for "Dataviews")`);
-                }
-                return matches;
-            });
+            const hasMatchingTeam = project.engineering_teams.some(team => 
+                teams.includes(team)
+            );
             if (hasMatchingTeam) {
                 filteredProjects[project.id] = project;
             }
         }
     });
-    
-    console.log(`Found ${dataviewsProjects.length} Dataview-related projects:`, dataviewsProjects);
-    console.log(`Total filtered projects: ${Object.keys(filteredProjects).length}`);
     
     // Update the filter status text
     const count = Object.keys(filteredProjects).length;
