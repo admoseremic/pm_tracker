@@ -968,6 +968,7 @@ function showProjectDetail(projectId) {
                 <div><strong>LOE Estimate:</strong> ${project.loe_estimate || 'Not set'}</div>
                 <div><strong>Days in Phase:</strong> ${daysInPhase}</div>
                 <div><strong>Priority:</strong> ${project.priority || 0}</div>
+                ${project.phase === 'delivery' && artifacts.release_date ? `<div><strong>Release Date:</strong> ${new Date(artifacts.release_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>` : ''}
             </div>
             
             ${project.engineering_teams && project.engineering_teams.length > 0 ? `
@@ -1003,7 +1004,7 @@ function showProjectDetail(projectId) {
                 <strong>Project Artifacts:</strong>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 0.5rem; margin-top: 0.5rem;">
                     ${Object.entries(artifacts).map(([key, value]) => {
-                        if (!value) return '';
+                        if (!value || key === 'release_date') return ''; // Exclude release_date from artifacts section
                         const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                         return `<div><strong>${label}:</strong> <a href="${value}" target="_blank" style="color: #007bff;">View</a></div>`;
                     }).join('')}
