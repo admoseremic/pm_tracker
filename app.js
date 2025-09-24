@@ -1045,6 +1045,7 @@ function showProjectDetail(projectId) {
 function openNewProjectModal() {
     resetNewProjectModal();
     document.getElementById('new-project-form').reset();
+    setupReleaseDateField(); // Ensure release date field visibility is correct
     document.getElementById('new-project-modal').style.display = 'block';
     document.getElementById('project-title').focus();
 }
@@ -1156,6 +1157,9 @@ function editProject(projectId) {
     const createButton = document.querySelector('#new-project-modal .modal-footer .btn:not(.btn-secondary)');
     createButton.textContent = 'Update Project';
     createButton.onclick = () => updateProject(projectId);
+    
+    // Update release date field visibility for the current phase
+    setupReleaseDateField();
     
     document.getElementById('new-project-modal').style.display = 'block';
     document.getElementById('project-title').focus();
