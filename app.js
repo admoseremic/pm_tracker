@@ -80,6 +80,9 @@ function setupEventListeners() {
     
     // Setup engineering teams input
     setupEngineeringTeamsInput();
+    
+    // Setup release date field visibility based on phase selection
+    setupReleaseDateField();
 }
 
 // Setup filter event listeners
@@ -627,6 +630,7 @@ function createProjectCard(project) {
             </div>
         ` : ''}
         ${project.phase === 'discovery' ? createDiscoveryValidation(project) : ''}
+        ${project.phase === 'delivery' ? createDeliveryInfo(project) : ''}
     `;
 
     // Add event listeners (only click - SortableJS handles drag)
@@ -644,6 +648,38 @@ function createDiscoveryValidation(project) {
             <div class="validation-checkbox ${validation.usability ? 'checked' : ''}" title="Usability">U</div>
             <div class="validation-checkbox ${validation.feasibility ? 'checked' : ''}" title="Feasibility">F</div>
             <div class="validation-checkbox ${validation.viability ? 'checked' : ''}" title="Viability">Vi</div>
+        </div>
+    `;
+}
+
+// Create delivery info display
+function createDeliveryInfo(project) {
+    const artifacts = project.artifacts || {};
+    const releaseDate = artifacts.release_date;
+    
+    if (!releaseDate) {
+        return `
+            <div class="delivery-info">
+                <div class="release-date-missing">⚠️ Release date not set</div>
+            </div>
+        `;
+    }
+    
+    // Format and display the release date
+    const date = new Date(releaseDate);
+    const isOverdue = date < new Date();
+    const formattedDate = date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        year: 'numeric' 
+    });
+    
+    return `
+        <div class="delivery-info">
+            <div class="release-date ${isOverdue ? 'overdue' : ''}">
+                <span class="icon">🚀</span>
+                <span class="release-date-text">${formattedDate}</span>
+            </div>
         </div>
     `;
 }
@@ -1071,6 +1107,14 @@ function createProject() {
         artifacts: {}
     };
     
+    // Add release date if this is a delivery phase project
+    if (selectedPhase === 'delivery') {
+        const releaseDate = document.getElementById('project-release-date').value;
+        if (releaseDate) {
+            projectData.artifacts.release_date = releaseDate;
+        }
+    }
+    
     database.ref(`projects/${projectData.id}`).set(projectData).then(() => {
         closeModal('new-project-modal');
         document.getElementById('new-project-form').reset();
@@ -1097,6 +1141,11 @@ function editProject(projectId) {
     document.getElementById('project-loe').value = project.loe_estimate || '';
     document.getElementById('project-jira-link').value = project.jira_link || '';
     setEngineeringTeamsToInput(project.engineering_teams || []);
+    
+    // Set release date if available
+    const artifacts = project.artifacts || {};
+    const releaseDate = artifacts.release_date || '';
+    document.getElementById('project-release-date').value = releaseDate;
     
     // Show priority field for editing and populate it
     document.getElementById('priority-group').style.display = 'block';
@@ -1135,6 +1184,16 @@ function updateProject(projectId) {
         engineering_teams: getEngineeringTeamsFromInput(),
         updated_at: new Date().toISOString()
     };
+    
+    // Handle release date if it's a delivery phase project
+    if (newPhase === 'delivery' || currentProject.phase === 'delivery') {
+        const releaseDate = document.getElementById('project-release-date').value;
+        const currentArtifacts = currentProject.artifacts || {};
+        if (releaseDate) {
+            currentArtifacts.release_date = releaseDate;
+        }
+        updates.artifacts = currentArtifacts;
+    }
     
     // Handle phase change if different
     let targetPhase = currentProject.phase;
@@ -1220,6 +1279,7 @@ function resetNewProjectModal() {
     document.getElementById('priority-group').style.display = 'none';
     document.getElementById('project-priority').value = '';
     document.getElementById('project-jira-link').value = '';
+    document.getElementById('project-release-date').value = '';
     document.getElementById('selected-teams').innerHTML = '';
     
     // Hide all suggestion dropdowns
@@ -1425,6 +1485,30 @@ function getAvailableUX() {
         }
     });
     return Array.from(ux).sort();
+}
+
+// Setup release date field visibility
+function setupReleaseDateField() {
+    const phaseSelect = document.getElementById('project-phase');
+    const releaseDateGroup = document.getElementById('release-date-group');
+    
+    if (!phaseSelect || !releaseDateGroup) return;
+    
+    // Show/hide release date field based on selected phase
+    function toggleReleaseDateField() {
+        const selectedPhase = phaseSelect.value;
+        if (selectedPhase === 'delivery') {
+            releaseDateGroup.style.display = 'block';
+        } else {
+            releaseDateGroup.style.display = 'none';
+        }
+    }
+    
+    // Set initial state
+    toggleReleaseDateField();
+    
+    // Listen for phase changes
+    phaseSelect.addEventListener('change', toggleReleaseDateField);
 }
 
 // Delete project
