@@ -62,6 +62,10 @@ const BOARD_CONFIGS = {
     '/classicapps': {
         name: 'Classic Apps',
         hideFilters: true
+    },
+    '/trevor': {
+        name: "Trevor's Watchlist",
+        hideFilters: true
     }
 };
 
@@ -1190,6 +1194,7 @@ function getSelectedBoards() {
     if (document.getElementById('board-cr').checked) boards.push('cr');
     if (document.getElementById('board-rh').checked) boards.push('rh');
     if (document.getElementById('board-classicapps').checked) boards.push('classicapps');
+    if (document.getElementById('board-trevor').checked) boards.push('trevor');
     return boards;
 }
 
@@ -1198,6 +1203,7 @@ function setSelectedBoards(boards) {
     document.getElementById('board-cr').checked = boards && boards.includes('cr');
     document.getElementById('board-rh').checked = boards && boards.includes('rh');
     document.getElementById('board-classicapps').checked = boards && boards.includes('classicapps');
+    document.getElementById('board-trevor').checked = boards && boards.includes('trevor');
 }
 
 // Create new project
