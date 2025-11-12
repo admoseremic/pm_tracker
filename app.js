@@ -49,8 +49,104 @@ const TRANSITION_REQUIREMENTS = {
     ]
 };
 
+// Board configurations for different URLs
+const BOARD_CONFIGS = {
+    '/cr': {
+        name: 'Conversational Reporting',
+        teams: ['Conversational'],
+        hideFilters: true
+    },
+    '/rh': {
+        name: 'Report Hub',
+        teams: ['Reporting Hub'],
+        hideFilters: true
+    },
+    '/classicapps': {
+        name: 'Classic Apps',
+        teams: ['BIRT', 'Cognos', 'Dataviews', 'Healthcare', 'KPI Data Platform'],
+        hideFilters: true
+    }
+};
+
+// Current board configuration (set based on URL)
+let currentBoardConfig = null;
+
+// Detect current board based on URL path
+function detectCurrentBoard() {
+    const path = window.location.pathname;
+    console.log('Current path:', path);
+
+    // Check if path matches any board configuration
+    if (BOARD_CONFIGS[path]) {
+        currentBoardConfig = BOARD_CONFIGS[path];
+        console.log('Board detected:', currentBoardConfig.name);
+        return true;
+    }
+
+    currentBoardConfig = null;
+    return false;
+}
+
+// Initialize board-specific settings (title, filters, etc.)
+function initializeBoardSettings() {
+    if (currentBoardConfig) {
+        // Update page title
+        const pageTitle = `${currentBoardConfig.name} - PM Tracker`;
+        document.title = pageTitle;
+        document.querySelector('.header h1').textContent = currentBoardConfig.name;
+
+        // Hide filter toolbar if configured
+        if (currentBoardConfig.hideFilters) {
+            const toolbar = document.querySelector('.toolbar');
+            if (toolbar) {
+                // Hide the filter section but keep the New Project button
+                const filterSection = toolbar.querySelector('.filter-section');
+                if (filterSection) {
+                    filterSection.style.display = 'none';
+                }
+            }
+        }
+    }
+}
+
+// Apply board-specific filters automatically
+function applyBoardFilters() {
+    if (!currentBoardConfig || !currentBoardConfig.teams) {
+        // No board-specific filter, show all projects
+        return;
+    }
+
+    // Filter projects to only show those from the board's teams
+    filteredProjects = {};
+    Object.values(projects).forEach(project => {
+        if (project.engineering_teams && Array.isArray(project.engineering_teams)) {
+            // Check if project has any of the board's teams
+            const hasMatchingTeam = project.engineering_teams.some(team =>
+                currentBoardConfig.teams.includes(team)
+            );
+            if (hasMatchingTeam) {
+                filteredProjects[project.id] = project;
+            }
+        }
+    });
+
+    // Update the filter status text
+    const count = Object.keys(filteredProjects).length;
+    const boardName = currentBoardConfig.name;
+    const statusElement = document.getElementById('filter-status');
+    if (statusElement) {
+        statusElement.textContent = `Showing ${count} ${boardName} project${count !== 1 ? 's' : ''}`;
+    }
+}
+
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
+    // Detect which board we're on based on URL
+    detectCurrentBoard();
+
+    // Apply board-specific settings
+    initializeBoardSettings();
+
     setupEventListeners();
     setupConnectionMonitoring();
     loadProjects();
@@ -405,14 +501,22 @@ function updateFilterDropdown(elementId, optionsSet, defaultText) {
 
 // Apply current filters to projects
 function applyFilters() {
+    // If we're on a board-specific URL, use board filters instead
+    if (currentBoardConfig && currentBoardConfig.teams) {
+        applyBoardFilters();
+        renderProjects();
+        updateProjectCounts();
+        return;
+    }
+
     // Get current filter values
     const filters = {
         engineering_team: document.getElementById('filter-engineering-team').value,
         pm_owner: document.getElementById('filter-pm-owner').value,
     };
-    
+
     currentFilters = filters;
-    
+
     // Filter projects
     filteredProjects = {};
     Object.values(projects).forEach(project => {
@@ -420,7 +524,7 @@ function applyFilters() {
             filteredProjects[project.id] = project;
         }
     });
-    
+
     // Render filtered projects
     renderProjects();
     updateProjectCounts();
@@ -544,7 +648,8 @@ function renderProjects() {
     // Use filtered projects, or empty object if no matches (don't fallback to all projects)
     const hasActiveFilters = Object.values(currentFilters).some(filter => filter && filter.trim());
     const hasQuickFilter = document.querySelector('.quick-filter-btn.active') !== null;
-    const projectsToRender = (hasActiveFilters || hasQuickFilter) ? filteredProjects : projects;
+    const hasBoardFilter = currentBoardConfig && currentBoardConfig.teams;
+    const projectsToRender = (hasActiveFilters || hasQuickFilter || hasBoardFilter) ? filteredProjects : projects;
 
     // Sort projects by priority within each phase
     const projectsByPhase = {};
@@ -713,16 +818,17 @@ function getLOESize(loe) {
 // Update project counts in column headers (for filtered view)
 function updateProjectCounts() {
     const hasActiveFilters = Object.values(currentFilters).some(filter => filter && filter.trim());
-    const projectsToCount = hasActiveFilters ? filteredProjects : projects;
+    const hasBoardFilter = currentBoardConfig && currentBoardConfig.teams;
+    const projectsToCount = (hasActiveFilters || hasBoardFilter) ? filteredProjects : projects;
     const counts = {};
     Object.keys(PHASES).forEach(phase => counts[phase] = 0);
-    
+
     Object.values(projectsToCount).forEach(project => {
         if (counts.hasOwnProperty(project.phase)) {
             counts[project.phase]++;
         }
     });
-    
+
     Object.keys(counts).forEach(phase => {
         const countElement = document.getElementById(`count-${phase}`);
         if (countElement) {
