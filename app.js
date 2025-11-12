@@ -1148,6 +1148,28 @@ function openNewProjectModal() {
     resetNewProjectModal();
     document.getElementById('new-project-form').reset();
     setupReleaseDateField(); // Ensure release date field visibility is correct
+
+    // Auto-assign board based on current URL
+    const boardsGroup = document.getElementById('boards-group');
+    if (currentBoardConfig) {
+        // On a specialized board - hide the boards section and auto-assign
+        if (boardsGroup) {
+            boardsGroup.style.display = 'none';
+        }
+
+        // Auto-select the current board
+        const boardKey = window.location.pathname.replace('/', '');
+        const checkbox = document.getElementById(`board-${boardKey}`);
+        if (checkbox) {
+            checkbox.checked = true;
+        }
+    } else {
+        // On main board - show the boards section for manual selection
+        if (boardsGroup) {
+            boardsGroup.style.display = 'block';
+        }
+    }
+
     document.getElementById('new-project-modal').style.display = 'block';
     document.getElementById('project-title').focus();
 }
@@ -1271,7 +1293,13 @@ function editProject(projectId) {
     // Show priority field for editing and populate it
     document.getElementById('priority-group').style.display = 'block';
     document.getElementById('project-priority').value = project.priority || '';
-    
+
+    // Always show boards section when editing (so user can change board assignments)
+    const boardsGroup = document.getElementById('boards-group');
+    if (boardsGroup) {
+        boardsGroup.style.display = 'block';
+    }
+
     // Change modal title and button
     document.querySelector('#new-project-modal .modal-header h2').textContent = 'Edit Project';
     const createButton = document.querySelector('#new-project-modal .modal-footer .btn:not(.btn-secondary)');
