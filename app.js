@@ -53,17 +53,14 @@ const TRANSITION_REQUIREMENTS = {
 const BOARD_CONFIGS = {
     '/cr': {
         name: 'Conversational Reporting',
-        teams: ['Conversational'],
         hideFilters: true
     },
     '/rh': {
         name: 'Report Hub',
-        teams: ['Reporting Hub'],
         hideFilters: true
     },
     '/classicapps': {
         name: 'Classic Apps',
-        teams: ['BIRT', 'Cognos', 'Dataviews', 'Healthcare', 'KPI Data Platform'],
         hideFilters: true
     }
 };
@@ -111,22 +108,20 @@ function initializeBoardSettings() {
 
 // Apply board-specific filters automatically
 function applyBoardFilters() {
-    if (!currentBoardConfig || !currentBoardConfig.teams) {
+    if (!currentBoardConfig) {
         // No board-specific filter, show all projects
         return;
     }
 
-    // Filter projects to only show those from the board's teams
+    // Determine current board key from URL
+    const boardKey = window.location.pathname.replace('/', ''); // e.g., 'cr', 'rh', 'classicapps'
+
+    // Filter projects to only show those that have this board in their boards array
     filteredProjects = {};
     Object.values(projects).forEach(project => {
-        if (project.engineering_teams && Array.isArray(project.engineering_teams)) {
-            // Check if project has any of the board's teams
-            const hasMatchingTeam = project.engineering_teams.some(team =>
-                currentBoardConfig.teams.includes(team)
-            );
-            if (hasMatchingTeam) {
-                filteredProjects[project.id] = project;
-            }
+        // Check if project's boards array includes the current board key
+        if (project.boards && Array.isArray(project.boards) && project.boards.includes(boardKey)) {
+            filteredProjects[project.id] = project;
         }
     });
 
@@ -502,7 +497,7 @@ function updateFilterDropdown(elementId, optionsSet, defaultText) {
 // Apply current filters to projects
 function applyFilters() {
     // If we're on a board-specific URL, use board filters instead
-    if (currentBoardConfig && currentBoardConfig.teams) {
+    if (currentBoardConfig) {
         applyBoardFilters();
         renderProjects();
         updateProjectCounts();
@@ -648,7 +643,7 @@ function renderProjects() {
     // Use filtered projects, or empty object if no matches (don't fallback to all projects)
     const hasActiveFilters = Object.values(currentFilters).some(filter => filter && filter.trim());
     const hasQuickFilter = document.querySelector('.quick-filter-btn.active') !== null;
-    const hasBoardFilter = currentBoardConfig && currentBoardConfig.teams;
+    const hasBoardFilter = currentBoardConfig !== null;
     const projectsToRender = (hasActiveFilters || hasQuickFilter || hasBoardFilter) ? filteredProjects : projects;
 
     // Sort projects by priority within each phase
@@ -818,7 +813,7 @@ function getLOESize(loe) {
 // Update project counts in column headers (for filtered view)
 function updateProjectCounts() {
     const hasActiveFilters = Object.values(currentFilters).some(filter => filter && filter.trim());
-    const hasBoardFilter = currentBoardConfig && currentBoardConfig.teams;
+    const hasBoardFilter = currentBoardConfig !== null;
     const projectsToCount = (hasActiveFilters || hasBoardFilter) ? filteredProjects : projects;
     const counts = {};
     Object.keys(PHASES).forEach(phase => counts[phase] = 0);
@@ -1167,6 +1162,22 @@ function closeAllModals() {
     });
 }
 
+// Get selected boards from checkboxes
+function getSelectedBoards() {
+    const boards = [];
+    if (document.getElementById('board-cr').checked) boards.push('cr');
+    if (document.getElementById('board-rh').checked) boards.push('rh');
+    if (document.getElementById('board-classicapps').checked) boards.push('classicapps');
+    return boards;
+}
+
+// Set board checkboxes based on array
+function setSelectedBoards(boards) {
+    document.getElementById('board-cr').checked = boards && boards.includes('cr');
+    document.getElementById('board-rh').checked = boards && boards.includes('rh');
+    document.getElementById('board-classicapps').checked = boards && boards.includes('classicapps');
+}
+
 // Create new project
 function createProject() {
     const title = document.getElementById('project-title').value.trim();
@@ -1174,17 +1185,17 @@ function createProject() {
         alert('Project title is required.');
         return;
     }
-    
+
     const selectedPhase = document.getElementById('project-phase').value;
-    
+
     // Calculate appropriate priority for new project (add to bottom)
     const phaseProjects = Object.values(projects)
         .filter(p => p.phase === selectedPhase)
         .sort((a, b) => (a.priority || 999999) - (b.priority || 999999));
-    
+
     // New project gets priority = number of existing projects + 1
     const calculatedPriority = phaseProjects.length + 1;
-    
+
     const projectData = {
         id: generateId(),
         title: title,
@@ -1197,6 +1208,7 @@ function createProject() {
         loe_estimate: document.getElementById('project-loe').value.trim(),
         jira_link: document.getElementById('project-jira-link').value.trim(),
         engineering_teams: getEngineeringTeamsFromInput(),
+        boards: getSelectedBoards(), // Add boards selection
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         phase_history: {
@@ -1249,7 +1261,8 @@ function editProject(projectId) {
     document.getElementById('project-loe').value = project.loe_estimate || '';
     document.getElementById('project-jira-link').value = project.jira_link || '';
     setEngineeringTeamsToInput(project.engineering_teams || []);
-    
+    setSelectedBoards(project.boards || []); // Set board selections
+
     // Set release date if available
     const artifacts = project.artifacts || {};
     const releaseDate = artifacts.release_date || '';
@@ -1293,6 +1306,7 @@ function updateProject(projectId) {
         loe_estimate: document.getElementById('project-loe').value.trim(),
         jira_link: document.getElementById('project-jira-link').value.trim(),
         engineering_teams: getEngineeringTeamsFromInput(),
+        boards: getSelectedBoards(), // Update boards selection
         updated_at: new Date().toISOString()
     };
     
@@ -1392,7 +1406,10 @@ function resetNewProjectModal() {
     document.getElementById('project-jira-link').value = '';
     document.getElementById('project-release-date').value = '';
     document.getElementById('selected-teams').innerHTML = '';
-    
+
+    // Clear board selections
+    setSelectedBoards([]);
+
     // Hide all suggestion dropdowns
     document.querySelectorAll('.suggestions-dropdown').forEach(dropdown => {
         dropdown.classList.remove('show');

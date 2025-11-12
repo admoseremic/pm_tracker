@@ -806,6 +806,25 @@
                         <input type="text" id="project-jira-link" class="form-input" placeholder="https://jira.example.com/browse/PROJ-123">
                     </div>
 
+                    <div class="form-group">
+                        <label class="form-label">Boards</label>
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; background: white;">
+                            <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: normal; cursor: pointer;">
+                                <input type="checkbox" id="board-cr" value="cr" style="cursor: pointer;">
+                                <span>Conversational Reporting</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: normal; cursor: pointer;">
+                                <input type="checkbox" id="board-rh" value="rh" style="cursor: pointer;">
+                                <span>Report Hub</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: normal; cursor: pointer;">
+                                <input type="checkbox" id="board-classicapps" value="classicapps" style="cursor: pointer;">
+                                <span>Classic Apps</span>
+                            </label>
+                        </div>
+                        <small style="color: #666; font-size: 0.75rem; margin-top: 0.25rem; display: block;">Select which specialized boards this project should appear on. Always appears on main board.</small>
+                    </div>
+
                     <div class="form-group" id="release-date-group" style="display: none;">
                         <label class="form-label">Release Date</label>
                         <input type="date" id="project-release-date" class="form-input">
