@@ -55,8 +55,12 @@ const BOARD_CONFIGS = {
         name: 'Conversational Reporting',
         hideFilters: true
     },
-    '/rh': {
-        name: 'Report Hub',
+    '/wih': {
+        name: 'Workforce Intelligence Hub',
+        hideFilters: true
+    },
+    '/hp': {
+        name: 'Healthcare Productivity',
         hideFilters: true
     },
     '/classicapps': {
@@ -145,6 +149,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Apply board-specific settings
     initializeBoardSettings();
+
+    // Run one-time migration (can be removed after migration is complete)
+    migrateRhToWih();
 
     setupEventListeners();
     setupConnectionMonitoring();
@@ -425,17 +432,44 @@ function handleSortableReorder(projectId, targetPhase, newIndex, referenceAboveI
     }
 }
 
+// One-time migration: rename 'rh' board to 'wih' in all projects
+// This function can be removed after migration is complete
+function migrateRhToWih() {
+    database.ref('projects').once('value', (snapshot) => {
+        const allProjects = snapshot.val() || {};
+        const updates = {};
+
+        Object.entries(allProjects).forEach(([projectId, project]) => {
+            if (project.boards && Array.isArray(project.boards) && project.boards.includes('rh')) {
+                // Replace 'rh' with 'wih' in the boards array
+                const newBoards = project.boards.map(b => b === 'rh' ? 'wih' : b);
+                updates[`projects/${projectId}/boards`] = newBoards;
+                console.log(`Migrating project ${projectId}: rh -> wih`);
+            }
+        });
+
+        // Apply all updates if any
+        if (Object.keys(updates).length > 0) {
+            database.ref().update(updates)
+                .then(() => console.log('Migration complete: rh -> wih'))
+                .catch(err => console.error('Migration error:', err));
+        } else {
+            console.log('No projects needed rh -> wih migration');
+        }
+    });
+}
+
 // Load projects from Firebase
 function loadProjects() {
     database.ref('projects').on('value', (snapshot) => {
         projects = snapshot.val() || {};
-        
+
         // Fix any negative or problematic priorities
         fixProjectPriorities();
-        
+
         // Update filter options based on current data
         updateFilterOptions();
-        
+
         // Apply current filters and render
         applyFilters();
     });
