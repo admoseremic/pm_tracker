@@ -1226,7 +1226,8 @@ function closeAllModals() {
 function getSelectedBoards() {
     const boards = [];
     if (document.getElementById('board-cr').checked) boards.push('cr');
-    if (document.getElementById('board-rh').checked) boards.push('rh');
+    if (document.getElementById('board-wih').checked) boards.push('wih');
+    if (document.getElementById('board-hp').checked) boards.push('hp');
     if (document.getElementById('board-classicapps').checked) boards.push('classicapps');
     if (document.getElementById('board-trevor').checked) boards.push('trevor');
     return boards;
@@ -1235,7 +1236,8 @@ function getSelectedBoards() {
 // Set board checkboxes based on array
 function setSelectedBoards(boards) {
     document.getElementById('board-cr').checked = boards && boards.includes('cr');
-    document.getElementById('board-rh').checked = boards && boards.includes('rh');
+    document.getElementById('board-wih').checked = boards && boards.includes('wih');
+    document.getElementById('board-hp').checked = boards && boards.includes('hp');
     document.getElementById('board-classicapps').checked = boards && boards.includes('classicapps');
     document.getElementById('board-trevor').checked = boards && boards.includes('trevor');
 }
