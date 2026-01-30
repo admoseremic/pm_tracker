@@ -760,11 +760,13 @@ function createDiscoveryValidation(project) {
     `;
 }
 
-// Create delivery info display
+// Create delivery info display with release confidence indicator
 function createDeliveryInfo(project) {
     const artifacts = project.artifacts || {};
     const releaseDate = artifacts.release_date;
-    
+    // release_confidence: "green", "yellow", "red", or undefined (shown as grey)
+    const confidence = project.release_confidence || 'none';
+
     if (!releaseDate) {
         return `
             <div class="delivery-info">
@@ -772,19 +774,20 @@ function createDeliveryInfo(project) {
             </div>
         `;
     }
-    
+
     // Format and display the release date
     const date = new Date(releaseDate);
     const isOverdue = date < new Date();
-    const formattedDate = date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric', 
-        year: 'numeric' 
+    const formattedDate = date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
     });
-    
+
     return `
         <div class="delivery-info">
             <div class="release-date ${isOverdue ? 'overdue' : ''}">
+                <span class="confidence-dot ${confidence}" onclick="event.stopPropagation(); cycleReleaseConfidence('${project.id}')" title="Confidence: ${confidence === 'none' ? 'not set' : confidence} (click to change)"></span>
                 <span class="icon">🚀</span>
                 <span class="release-date-text">${formattedDate}</span>
             </div>
@@ -1719,6 +1722,27 @@ function deleteProject(projectId) {
 // Utility function to generate unique IDs
 function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
+
+// ============================================================
+// Release Confidence Indicator
+// Cycles through: none (grey) → green → yellow → red → none
+// Stored as project.release_confidence in Firebase
+// ============================================================
+
+function cycleReleaseConfidence(projectId) {
+    const project = projects[projectId];
+    if (!project) return;
+
+    // Cycle order: none → green → yellow → red → none
+    const cycle = ['none', 'green', 'yellow', 'red'];
+    const current = project.release_confidence || 'none';
+    const nextIndex = (cycle.indexOf(current) + 1) % cycle.length;
+    const next = cycle[nextIndex];
+
+    // Save to Firebase (store null if 'none' to keep data clean)
+    const value = next === 'none' ? null : next;
+    database.ref(`projects/${projectId}/release_confidence`).set(value);
 }
 
 // ============================================================
