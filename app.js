@@ -760,12 +760,13 @@ function createDiscoveryValidation(project) {
     `;
 }
 
-// Create delivery info display with release confidence indicator
+// Create delivery info display with release confidence coloring
+// Background color reflects confidence: green (default), yellow (at risk), red (off track)
 function createDeliveryInfo(project) {
     const artifacts = project.artifacts || {};
     const releaseDate = artifacts.release_date;
-    // release_confidence: "green", "yellow", "red", or undefined (shown as grey)
-    const confidence = project.release_confidence || 'none';
+    // release_confidence: "green" (default), "yellow", or "red"
+    const confidence = project.release_confidence || 'green';
 
     if (!releaseDate) {
         return `
@@ -777,7 +778,6 @@ function createDeliveryInfo(project) {
 
     // Format and display the release date
     const date = new Date(releaseDate);
-    const isOverdue = date < new Date();
     const formattedDate = date.toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
@@ -786,8 +786,7 @@ function createDeliveryInfo(project) {
 
     return `
         <div class="delivery-info">
-            <div class="release-date ${isOverdue ? 'overdue' : ''}">
-                <span class="confidence-dot ${confidence}" onclick="event.stopPropagation(); cycleReleaseConfidence('${project.id}')" title="Confidence: ${confidence === 'none' ? 'not set' : confidence} (click to change)"></span>
+            <div class="release-date confidence-${confidence}">
                 <span class="icon">🚀</span>
                 <span class="release-date-text">${formattedDate}</span>
             </div>
@@ -1286,12 +1285,13 @@ function createProject() {
         artifacts: {}
     };
     
-    // Add release date if this is a delivery phase project
+    // Add release date and confidence if this is a delivery phase project
     if (selectedPhase === 'delivery') {
         const releaseDate = document.getElementById('project-release-date').value;
         if (releaseDate) {
             projectData.artifacts.release_date = releaseDate;
         }
+        projectData.release_confidence = document.getElementById('project-release-confidence').value || 'green';
     }
     
     database.ref(`projects/${projectData.id}`).set(projectData).then(() => {
@@ -1322,10 +1322,11 @@ function editProject(projectId) {
     setEngineeringTeamsToInput(project.engineering_teams || []);
     setSelectedBoards(project.boards || []); // Set board selections
 
-    // Set release date if available
+    // Set release date and confidence if available
     const artifacts = project.artifacts || {};
     const releaseDate = artifacts.release_date || '';
     document.getElementById('project-release-date').value = releaseDate;
+    document.getElementById('project-release-confidence').value = project.release_confidence || 'green';
     
     // Show priority field for editing and populate it
     document.getElementById('priority-group').style.display = 'block';
@@ -1375,7 +1376,7 @@ function updateProject(projectId) {
         updated_at: new Date().toISOString()
     };
     
-    // Handle release date if it's a delivery phase project
+    // Handle release date and confidence if it's a delivery phase project
     if (newPhase === 'delivery' || currentProject.phase === 'delivery') {
         const releaseDate = document.getElementById('project-release-date').value;
         const currentArtifacts = currentProject.artifacts || {};
@@ -1383,6 +1384,7 @@ function updateProject(projectId) {
             currentArtifacts.release_date = releaseDate;
         }
         updates.artifacts = currentArtifacts;
+        updates.release_confidence = document.getElementById('project-release-confidence').value || 'green';
     }
     
     // Handle phase change if different
@@ -1470,6 +1472,7 @@ function resetNewProjectModal() {
     document.getElementById('project-priority').value = '';
     document.getElementById('project-jira-link').value = '';
     document.getElementById('project-release-date').value = '';
+    document.getElementById('project-release-confidence').value = 'green';
     document.getElementById('selected-teams').innerHTML = '';
 
     // Clear board selections
@@ -1722,27 +1725,6 @@ function deleteProject(projectId) {
 // Utility function to generate unique IDs
 function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
-}
-
-// ============================================================
-// Release Confidence Indicator
-// Cycles through: none (grey) → green → yellow → red → none
-// Stored as project.release_confidence in Firebase
-// ============================================================
-
-function cycleReleaseConfidence(projectId) {
-    const project = projects[projectId];
-    if (!project) return;
-
-    // Cycle order: none → green → yellow → red → none
-    const cycle = ['none', 'green', 'yellow', 'red'];
-    const current = project.release_confidence || 'none';
-    const nextIndex = (cycle.indexOf(current) + 1) % cycle.length;
-    const next = cycle[nextIndex];
-
-    // Save to Firebase (store null if 'none' to keep data clean)
-    const value = next === 'none' ? null : next;
-    database.ref(`projects/${projectId}/release_confidence`).set(value);
 }
 
 // ============================================================
