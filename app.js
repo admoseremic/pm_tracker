@@ -1144,11 +1144,27 @@ function showProjectDetail(projectId) {
                     </div>
                 </div>
             ` : ''}
+
+            <!-- Comments section -->
+            <div class="comments-section">
+                <h3>Comments</h3>
+                <div class="comment-input-row">
+                    <input type="text" id="comment-author-input" placeholder="Your name" style="max-width: 140px;">
+                    <input type="text" id="comment-text-input" placeholder="Add a comment..." onkeydown="if(event.key==='Enter') addComment('${projectId}')">
+                    <button class="btn" onclick="addComment('${projectId}')">Post</button>
+                </div>
+                <div class="comments-list" id="comments-list-${projectId}">
+                    ${renderComments(project)}
+                </div>
+            </div>
         </div>
     `;
-    
+
     content.innerHTML = html;
     modal.style.display = 'block';
+
+    // Listen for real-time comment updates on this project
+    setupCommentListener(projectId);
 }
 
 // Modal functions
@@ -1184,12 +1200,18 @@ function openNewProjectModal() {
 
 function closeModal(modalId) {
     document.getElementById(modalId).style.display = 'none';
+    // Clean up comment listener when closing the detail modal
+    if (modalId === 'project-detail-modal') {
+        teardownCommentListener();
+    }
 }
 
 function closeAllModals() {
     document.querySelectorAll('.modal').forEach(modal => {
         modal.style.display = 'none';
     });
+    // Clean up comment listener when closing all modals
+    teardownCommentListener();
 }
 
 // Get selected boards from checkboxes
@@ -1697,6 +1719,135 @@ function deleteProject(projectId) {
 // Utility function to generate unique IDs
 function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
+
+// ============================================================
+// Comments System
+// Comments are stored at projects/{projectId}/comments/{commentId}
+// Each comment: { text, author, created_at }
+// ============================================================
+
+// Active comment listener reference (so we can detach when modal closes)
+let activeCommentListener = null;
+
+// Render comments HTML for a project (used on initial load)
+function renderComments(project) {
+    const comments = project.comments;
+    if (!comments || Object.keys(comments).length === 0) {
+        return '<div class="no-comments">No comments yet</div>';
+    }
+
+    // Sort comments by created_at (newest last)
+    const sorted = Object.entries(comments)
+        .map(([id, c]) => ({ id, ...c }))
+        .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+    return sorted.map(comment => `
+        <div class="comment-item">
+            <button class="comment-delete" onclick="deleteComment('${project.id}', '${comment.id}')" title="Delete comment">&times;</button>
+            <div class="comment-header">
+                <span class="comment-author">${comment.author || 'Anonymous'}</span>
+                <span class="comment-date">${formatCommentDate(comment.created_at)}</span>
+            </div>
+            <div class="comment-text">${escapeHtml(comment.text)}</div>
+        </div>
+    `).join('');
+}
+
+// Add a new comment to a project
+function addComment(projectId) {
+    const textInput = document.getElementById('comment-text-input');
+    const authorInput = document.getElementById('comment-author-input');
+    const text = textInput.value.trim();
+    const author = authorInput.value.trim() || 'Anonymous';
+
+    if (!text) return;
+
+    const commentId = generateId();
+    const commentData = {
+        text: text,
+        author: author,
+        created_at: new Date().toISOString()
+    };
+
+    // Save to Firebase under the project's comments node
+    database.ref(`projects/${projectId}/comments/${commentId}`).set(commentData)
+        .then(() => {
+            textInput.value = '';
+            // Remember the author name for convenience
+            localStorage.setItem('pm_tracker_comment_author', author);
+        })
+        .catch(error => {
+            console.error('Error adding comment:', error);
+            alert('Error adding comment. Please try again.');
+        });
+}
+
+// Delete a comment from a project
+function deleteComment(projectId, commentId) {
+    if (!confirm('Delete this comment?')) return;
+
+    database.ref(`projects/${projectId}/comments/${commentId}`).remove()
+        .catch(error => {
+            console.error('Error deleting comment:', error);
+            alert('Error deleting comment. Please try again.');
+        });
+}
+
+// Listen for real-time comment changes while the detail modal is open
+function setupCommentListener(projectId) {
+    // Detach any previous listener
+    teardownCommentListener();
+
+    const commentsRef = database.ref(`projects/${projectId}/comments`);
+    activeCommentListener = { ref: commentsRef, projectId: projectId };
+
+    commentsRef.on('value', (snapshot) => {
+        const commentsContainer = document.getElementById(`comments-list-${projectId}`);
+        if (!commentsContainer) return;
+
+        const comments = snapshot.val();
+        const project = { id: projectId, comments: comments };
+        commentsContainer.innerHTML = renderComments(project);
+    });
+
+    // Pre-fill the author field from localStorage if available
+    const savedAuthor = localStorage.getItem('pm_tracker_comment_author');
+    const authorInput = document.getElementById('comment-author-input');
+    if (savedAuthor && authorInput) {
+        authorInput.value = savedAuthor;
+    }
+}
+
+// Clean up comment listener when modal closes
+function teardownCommentListener() {
+    if (activeCommentListener) {
+        activeCommentListener.ref.off('value');
+        activeCommentListener = null;
+    }
+}
+
+// Format a comment timestamp into a readable date string
+function formatCommentDate(isoString) {
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// Escape HTML to prevent XSS in comment text
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // Connection monitoring is now handled in setupConnectionMonitoring()
