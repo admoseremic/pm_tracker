@@ -1098,7 +1098,7 @@ function showProjectDetail(projectId) {
             ${project.description ? `
                 <div style="margin-bottom: 1.5rem;">
                     <strong>Description:</strong>
-                    <p style="margin-top: 0.5rem; padding: 1rem; background: #f8f9fa; border-radius: 4px;">${project.description}</p>
+                    <p style="margin-top: 0.5rem; padding: 1rem; background: #f8f9fa; border-radius: 4px; white-space: pre-wrap;">${project.description}</p>
                 </div>
             ` : ''}
             
