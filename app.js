@@ -128,6 +128,8 @@ function applyBoardFilters() {
     filteredProjects = {};
     Object.values(projects).forEach(project => {
         // Check if project's boards array includes the current board key
+        // Skip released projects - they stay in DB but are hidden from the board
+        if (project.released) return;
         if (project.boards && Array.isArray(project.boards) && project.boards.includes(boardKey)) {
             filteredProjects[project.id] = project;
         }
@@ -537,7 +539,12 @@ function applyFilters() {
 // Check if a project passes the current filters (INTERSECTION/AND logic)
 function passesFilters(project, filters) {
     // All filters must pass for the project to be included (AND logic)
-    
+
+    // Released projects are always hidden from the board
+    if (project.released) {
+        return false;
+    }
+
     // Engineering Team filter - project must include the selected team
     if (filters.engineering_team) {
         if (!project.engineering_teams || !Array.isArray(project.engineering_teams)) {
@@ -560,7 +567,8 @@ function passesFilters(project, filters) {
 
 // Update filter status display
 function updateFilterStatus() {
-    const totalProjects = Object.keys(projects).length;
+    // Exclude released projects from the total count
+    const totalProjects = Object.values(projects).filter(p => !p.released).length;
     const filteredCount = Object.keys(filteredProjects).length;
     const statusElement = document.getElementById('filter-status');
     
@@ -888,9 +896,10 @@ function applyTeamFilter(teams) {
     // Clear existing filters and set custom filter logic
     filteredProjects = {};
     Object.values(projects).forEach(project => {
+        if (project.released) return; // Skip released projects
         if (project.engineering_teams && Array.isArray(project.engineering_teams)) {
             // Check if project has any of the specified teams
-            const hasMatchingTeam = project.engineering_teams.some(team => 
+            const hasMatchingTeam = project.engineering_teams.some(team =>
                 teams.includes(team)
             );
             if (hasMatchingTeam) {
@@ -912,6 +921,7 @@ function filterPlanningOverdue() {
     twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
     
     Object.values(projects).forEach(project => {
+        if (project.released) return; // Skip released projects
         if (project.phase === 'planning' && project.phase_history) {
             // Find when the project entered the planning phase
             const history = Object.values(project.phase_history);
@@ -1067,6 +1077,7 @@ function showProjectDetail(projectId) {
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <span style="background: ${PHASES[project.phase].color}; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.75rem; font-weight: 500;">${PHASES[project.phase].name}</span>
                 <div>
+                    ${project.phase === 'delivery' ? `<button class="btn" style="background: #28a745; margin-right: 0.5rem;" onclick="releaseProject('${projectId}')">🚀 Mark as Released</button>` : ''}
                     <button class="btn btn-secondary" onclick="editProject('${projectId}')">Edit</button>
                     <button class="btn" style="background: #dc3545; margin-left: 0.5rem;" onclick="deleteProject('${projectId}')">Delete</button>
                 </div>
@@ -1705,6 +1716,25 @@ function setupReleaseDateField() {
     
     // Listen for phase changes
     phaseSelect.addEventListener('change', toggleReleaseDateField);
+}
+
+// Mark a project as released - hides it from the board but keeps it in the DB
+function releaseProject(projectId) {
+    const project = projects[projectId];
+    if (!project) return;
+
+    if (confirm(`Mark "${project.title}" as released? It will be removed from the board but kept in the database.`)) {
+        database.ref(`projects/${projectId}`).update({
+            released: true,
+            released_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+        }).then(() => {
+            closeModal('project-detail-modal');
+        }).catch(error => {
+            console.error('Error releasing project:', error);
+            alert('Error marking project as released. Please try again.');
+        });
+    }
 }
 
 // Delete project
