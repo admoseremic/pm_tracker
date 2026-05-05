@@ -1,0 +1,21 @@
+{
+  "name": "pm-tracker-mcp-functions",
+  "description": "Firebase Functions hosting an MCP server for the PM tracker Realtime DB",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "firebase-admin": "^13.8.0",
+    "firebase-functions": "^7.2.0",
+    "zod": "^3.25.0"
+  }
+}
