@@ -20,6 +20,9 @@ let sortableInstances = {};
 let currentFilters = {};
 let filteredProjects = {};
 
+// Show released projects when the URL has ?released=true (e.g. /wih?released=true)
+const showReleased = new URLSearchParams(window.location.search).get('released') === 'true';
+
 // Phase configuration
 const PHASES = {
     idea: { name: 'Ideas', color: '#e3f2fd' },
@@ -129,7 +132,7 @@ function applyBoardFilters() {
     Object.values(projects).forEach(project => {
         // Check if project's boards array includes the current board key
         // Skip released projects - they stay in DB but are hidden from the board
-        if (project.released) return;
+        if (project.released && !showReleased) return;
         if (project.boards && Array.isArray(project.boards) && project.boards.includes(boardKey)) {
             filteredProjects[project.id] = project;
         }
@@ -250,6 +253,7 @@ function initializeSortableColumns() {
         if (columnElement && !sortableInstances[phase]) {
             sortableInstances[phase] = new Sortable(columnElement, {
                 group: 'kanban', // Allow dragging between columns
+                filter: '.released', // Released cards are view-only, not draggable
                 animation: 300, // Smooth animation
                 ghostClass: 'sortable-ghost',
                 chosenClass: 'sortable-chosen', 
@@ -302,9 +306,14 @@ function handleSortableMove(evt) {
     }
     
     // Get the visible cards in the target column to determine reference points
-    const visibleCards = Array.from(evt.to.children);
-    const cardAbove = newIndex > 0 ? visibleCards[newIndex - 1] : null;
-    const cardBelow = visibleCards[newIndex + 1] || null; // Card that was pushed down
+    // Released cards (shown via ?released=true) are excluded so priorities are
+    // only computed relative to active projects
+    const visibleCards = Array.from(evt.to.children).filter(
+        el => el === evt.item || !el.classList.contains('released')
+    );
+    const itemIndex = visibleCards.indexOf(evt.item);
+    const cardAbove = itemIndex > 0 ? visibleCards[itemIndex - 1] : null;
+    const cardBelow = visibleCards[itemIndex + 1] || null; // Card that was pushed down
     
     console.log(`Moving ${projects[projectId].title} from ${oldPhase} to ${newPhase} at visual position ${newIndex + 1}`);
     
@@ -327,7 +336,7 @@ function handleSortableMove(evt) {
     const referenceBelowId = cardBelow ? cardBelow.dataset.projectId : null;
     
     // Handle the reordering with batch updates
-    handleSortableReorder(projectId, newPhase, newIndex, referenceAboveId, referenceBelowId);
+    handleSortableReorder(projectId, newPhase, itemIndex, referenceAboveId, referenceBelowId);
 }
 
 // Handle reordering after SortableJS move
@@ -540,8 +549,8 @@ function applyFilters() {
 function passesFilters(project, filters) {
     // All filters must pass for the project to be included (AND logic)
 
-    // Released projects are always hidden from the board
-    if (project.released) {
+    // Released projects are hidden from the board unless ?released=true
+    if (project.released && !showReleased) {
         return false;
     }
 
@@ -568,7 +577,7 @@ function passesFilters(project, filters) {
 // Update filter status display
 function updateFilterStatus() {
     // Exclude released projects from the total count
-    const totalProjects = Object.values(projects).filter(p => !p.released).length;
+    const totalProjects = Object.values(projects).filter(p => !p.released || showReleased).length;
     const filteredCount = Object.keys(filteredProjects).length;
     const statusElement = document.getElementById('filter-status');
     
@@ -660,7 +669,9 @@ function renderProjects() {
     const hasActiveFilters = Object.values(currentFilters).some(filter => filter && filter.trim());
     const hasQuickFilter = document.querySelector('.quick-filter-btn.active') !== null;
     const hasBoardFilter = currentBoardConfig !== null;
-    const projectsToRender = (hasActiveFilters || hasQuickFilter || hasBoardFilter) ? filteredProjects : projects;
+    const projectsToRender = (hasActiveFilters || hasQuickFilter || hasBoardFilter)
+        ? filteredProjects
+        : Object.fromEntries(Object.entries(projects).filter(([, p]) => !p.released || showReleased));
 
     // Sort projects by priority within each phase
     const projectsByPhase = {};
@@ -680,7 +691,14 @@ function renderProjects() {
     // Render projects in each column
     Object.keys(projectsByPhase).forEach(phase => {
         // Sort by priority (lower number = higher in column, priority 1 is at top)
+        // Released projects sort below active ones, most recently released first
         const sortedProjects = projectsByPhase[phase].sort((a, b) => {
+            if (!!a.released !== !!b.released) {
+                return a.released ? 1 : -1;
+            }
+            if (a.released && b.released) {
+                return new Date(b.released_at || 0) - new Date(a.released_at || 0);
+            }
             const aPriority = typeof a.priority === 'number' ? a.priority : 999999;
             const bPriority = typeof b.priority === 'number' ? b.priority : 999999;
             return aPriority - bPriority; // Lower number comes first
@@ -702,7 +720,7 @@ function renderProjects() {
 // Create a project card element
 function createProjectCard(project) {
     const card = document.createElement('div');
-    card.className = 'project-card';
+    card.className = 'project-card' + (project.released ? ' released' : '');
     card.dataset.projectId = project.id;
     
     // Calculate days in current phase
@@ -746,13 +764,26 @@ function createProjectCard(project) {
             </div>
         ` : ''}
         ${project.phase === 'discovery' ? createDiscoveryValidation(project) : ''}
-        ${project.phase === 'delivery' ? createDeliveryInfo(project) : ''}
+        ${project.released ? createReleasedBadge(project) : (project.phase === 'delivery' ? createDeliveryInfo(project) : '')}
     `;
 
     // Add event listeners (only click - SortableJS handles drag)
     card.addEventListener('click', () => showProjectDetail(project.id));
 
     return card;
+}
+
+// Create the badge shown on released project cards, with release date if known
+function createReleasedBadge(project) {
+    const releasedAt = project.released_at || (project.artifacts || {}).release_date;
+    let dateText = '';
+    if (releasedAt) {
+        const date = new Date(releasedAt);
+        if (!isNaN(date)) {
+            dateText = ' ' + date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+    }
+    return `<div class="released-badge">✅ Released${dateText}</div>`;
 }
 
 // Create discovery validation checkboxes
@@ -896,7 +927,7 @@ function applyTeamFilter(teams) {
     // Clear existing filters and set custom filter logic
     filteredProjects = {};
     Object.values(projects).forEach(project => {
-        if (project.released) return; // Skip released projects
+        if (project.released && !showReleased) return; // Skip released projects
         if (project.engineering_teams && Array.isArray(project.engineering_teams)) {
             // Check if project has any of the specified teams
             const hasMatchingTeam = project.engineering_teams.some(team =>
@@ -921,7 +952,7 @@ function filterPlanningOverdue() {
     twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
     
     Object.values(projects).forEach(project => {
-        if (project.released) return; // Skip released projects
+        if (project.released && !showReleased) return; // Skip released projects
         if (project.phase === 'planning' && project.phase_history) {
             // Find when the project entered the planning phase
             const history = Object.values(project.phase_history);
