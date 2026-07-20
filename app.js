@@ -155,6 +155,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Apply board-specific settings
     initializeBoardSettings();
 
+    // Show the view-only Delivered lane when ?released=true
+    if (showReleased) {
+        document.getElementById('released-column').style.display = '';
+    }
+
     setupEventListeners();
     setupConnectionMonitoring();
     loadProjects();
@@ -657,8 +662,8 @@ function fixProjectPriorities() {
 
 // Render filtered projects on the board
 function renderProjects() {
-    // Clear all columns
-    Object.keys(PHASES).forEach(phase => {
+    // Clear all columns (including the Delivered lane)
+    [...Object.keys(PHASES), 'released'].forEach(phase => {
         const column = document.getElementById(`column-${phase}`);
         if (column) {
             column.innerHTML = '';
@@ -673,31 +678,32 @@ function renderProjects() {
         ? filteredProjects
         : Object.fromEntries(Object.entries(projects).filter(([, p]) => !p.released || showReleased));
 
-    // Sort projects by priority within each phase
+    // Group projects by column: released projects go to the Delivered lane,
+    // everything else to its phase column
     const projectsByPhase = {};
     Object.values(projectsToRender).forEach(project => {
+        const bucket = project.released ? 'released' : project.phase;
         // Ensure phase is valid
-        if (!project.phase || !PHASES[project.phase]) {
+        if (!project.released && (!project.phase || !PHASES[project.phase])) {
             console.warn('Project has invalid phase:', project);
             return;
         }
-        
-        if (!projectsByPhase[project.phase]) {
-            projectsByPhase[project.phase] = [];
+
+        if (!projectsByPhase[bucket]) {
+            projectsByPhase[bucket] = [];
         }
-        projectsByPhase[project.phase].push(project);
+        projectsByPhase[bucket].push(project);
     });
 
     // Render projects in each column
     Object.keys(projectsByPhase).forEach(phase => {
-        // Sort by priority (lower number = higher in column, priority 1 is at top)
-        // Released projects sort below active ones, most recently released first
+        // Delivered lane: most recently released on top.
+        // Phase columns: sort by priority (lower number = higher in column)
         const sortedProjects = projectsByPhase[phase].sort((a, b) => {
-            if (!!a.released !== !!b.released) {
-                return a.released ? 1 : -1;
-            }
-            if (a.released && b.released) {
-                return new Date(b.released_at || 0) - new Date(a.released_at || 0);
+            if (phase === 'released') {
+                const aDate = a.released_at || (a.artifacts || {}).release_date || 0;
+                const bDate = b.released_at || (b.artifacts || {}).release_date || 0;
+                return new Date(bDate) - new Date(aDate);
             }
             const aPriority = typeof a.priority === 'number' ? a.priority : 999999;
             const bPriority = typeof b.priority === 'number' ? b.priority : 999999;
@@ -865,9 +871,14 @@ function updateProjectCounts() {
     const hasBoardFilter = currentBoardConfig !== null;
     const projectsToCount = (hasActiveFilters || hasBoardFilter) ? filteredProjects : projects;
     const counts = {};
-    Object.keys(PHASES).forEach(phase => counts[phase] = 0);
+    [...Object.keys(PHASES), 'released'].forEach(phase => counts[phase] = 0);
 
     Object.values(projectsToCount).forEach(project => {
+        // Released projects count toward the Delivered lane, not their phase column
+        if (project.released) {
+            if (showReleased) counts.released++;
+            return;
+        }
         if (counts.hasOwnProperty(project.phase)) {
             counts[project.phase]++;
         }
