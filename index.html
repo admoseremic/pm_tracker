@@ -210,6 +210,7 @@
         .phase-planning { background-color: #e8f5e8; }
         .phase-ready { background-color: #fff3e0; }
         .phase-delivery { background-color: #ffebee; }
+        .phase-released { background-color: #e8f5e9; }
 
         .column-count {
             background: #666;
@@ -244,6 +245,17 @@
         .project-card.dragging {
             opacity: 0.5;
             transform: rotate(2deg);
+        }
+
+        .released-badge {
+            display: inline-block;
+            margin-top: 0.5rem;
+            padding: 0.15rem 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #1e7e34;
+            background: #d4edda;
+            border-radius: 4px;
         }
 
         .project-title {
@@ -841,6 +853,15 @@
                 <span class="column-count" id="count-delivery">0</span>
             </div>
             <div class="column-content" id="column-delivery"></div>
+        </div>
+
+        <!-- Only visible with ?released=true; view-only, no drag & drop -->
+        <div class="kanban-column phase-released" data-phase="released" id="released-column" style="display: none;">
+            <div class="column-header">
+                ✅ Delivered
+                <span class="column-count" id="count-released">0</span>
+            </div>
+            <div class="column-content" id="column-released"></div>
         </div>
     </div>
 
