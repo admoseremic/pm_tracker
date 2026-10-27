@@ -7,7 +7,7 @@
 // truth). Field-level invariants we mirror here:
 //
 //   - phase: one of idea | discovery | planning | ready | delivery
-//   - boards: array containing any of: cr | wih | hp | classicapps | trevor
+//   - boards: array containing any of: cr | wih | hp | classicapps | trevor | benchmarks
 //   - priority: 1-indexed integer, unique within a phase column
 //   - phase_history: object keyed by string indices ("0", "1", ...) where
 //     each entry is { phase, entered_at, entered_by }
@@ -24,7 +24,7 @@ import { z } from "zod";
 // ---------------------------------------------------------------------------
 
 const PHASES = ["idea", "discovery", "planning", "ready", "delivery"];
-const BOARDS = ["cr", "wih", "hp", "classicapps", "trevor"];
+const BOARDS = ["cr", "wih", "hp", "classicapps", "trevor", "benchmarks"];
 const RELEASE_CONFIDENCES = ["green", "yellow", "red"];
 
 // Known artifact keys per the transition requirements in /app.js. Tools accept

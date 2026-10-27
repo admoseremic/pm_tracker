@@ -73,6 +73,10 @@ const BOARD_CONFIGS = {
     '/trevor': {
         name: "Trevor's Watchlist",
         hideFilters: true
+    },
+    '/benchmarks': {
+        name: 'Benchmarks',
+        hideFilters: true
     }
 };
 
@@ -1277,6 +1281,7 @@ function getSelectedBoards() {
     if (document.getElementById('board-hp').checked) boards.push('hp');
     if (document.getElementById('board-classicapps').checked) boards.push('classicapps');
     if (document.getElementById('board-trevor').checked) boards.push('trevor');
+    if (document.getElementById('board-benchmarks').checked) boards.push('benchmarks');
     return boards;
 }
 
@@ -1287,6 +1292,7 @@ function setSelectedBoards(boards) {
     document.getElementById('board-hp').checked = boards && boards.includes('hp');
     document.getElementById('board-classicapps').checked = boards && boards.includes('classicapps');
     document.getElementById('board-trevor').checked = boards && boards.includes('trevor');
+    document.getElementById('board-benchmarks').checked = boards && boards.includes('benchmarks');
 }
 
 // Create new project
