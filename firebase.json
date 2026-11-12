@@ -6,8 +6,7 @@
       "**/.*",
       "**/node_modules/**",
       "functions/**",
-      "README.md",
-      "PRODUCT_REQUIREMENTS.md"
+      "**/*.md"
     ],
     "rewrites": [
       {
@@ -24,11 +23,11 @@
     ],
     "headers": [
       {
-        "source": "**/*.@(js|css)",
+        "source": "**",
         "headers": [
           {
             "key": "Cache-Control",
-            "value": "max-age=31536000"
+            "value": "no-cache"
           }
         ]
       }

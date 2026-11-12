@@ -15,6 +15,12 @@ permissions:
   issues: write
   pull-requests: write
 
+# Run one deploy at a time so two quick pushes can't finish out of order
+# and leave an older version live.
+concurrency:
+  group: firebase-deploy
+  cancel-in-progress: false
+
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
